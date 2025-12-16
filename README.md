@@ -99,13 +99,27 @@ gitlab-toolbox mergerequests list --author your-username --pipeline-status runni
 ### CI/CD Pipelines
 ```bash
 # List pipelines
-gitlab-toolbox pipelines list PROJECT_PATH [--status running|pending|success|failed|canceled|skipped] [--limit N]
+gitlab-toolbox pipelines list --project PROJECT_PATH [--status running|pending|success|failed|canceled|skipped] [--limit N]
 
 # Show pipeline details
-gitlab-toolbox pipelines show PROJECT_PATH PIPELINE_ID
+gitlab-toolbox pipelines show --project PROJECT_PATH PIPELINE_ID
 
 # List pipeline jobs
-gitlab-toolbox pipelines jobs PROJECT_PATH PIPELINE_ID
+gitlab-toolbox pipelines jobs --project PROJECT_PATH PIPELINE_ID
+```
+
+### CI/CD Pipeline Schedules
+```bash
+# List pipeline schedules (sorted by description, shows active status and most recent pipeline status if available)
+gitlab-toolbox pipeline-schedules list --project PROJECT_PATH [--state active|inactive] [--limit N] [--include-last-pipeline]
+
+# Note: --include-last-pipeline fetches the most recent pipeline for each schedule using individual API calls for accuracy
+
+# Show schedule details (includes owner, last pipeline info, and custom variables)
+gitlab-toolbox pipeline-schedules show --project PROJECT_PATH SCHEDULE_ID
+
+# List pipelines triggered by a specific schedule
+gitlab-toolbox pipeline-schedules pipelines --project PROJECT_PATH SCHEDULE_ID [--limit N]
 ```
 
 ## Features
@@ -114,6 +128,7 @@ gitlab-toolbox pipelines jobs PROJECT_PATH PIPELINE_ID
 - **Projects**: List and search projects across groups
 - **Merge Requests**: View, search, and filter merge requests with advanced pipeline status filtering
 - **CI/CD Pipelines**: Monitor pipeline status, view jobs, and check artifacts
+- **CI/CD Pipeline Schedules**: List and view pipeline schedules with state filtering, schedule status, last pipeline run information, and triggered pipeline history (GraphQL-optimized for efficiency)
 - **Pipeline Status Filtering**: Filter merge requests by their latest pipeline status (success, failed, running, etc.), just like GitLab's web interface
 - **Performance**: Optimized API calls with date filtering (last 30 days) and source type restrictions (merge request pipelines only) to reduce data transfer
 - **Search**: Search support for groups, projects, and merge requests where API supports it

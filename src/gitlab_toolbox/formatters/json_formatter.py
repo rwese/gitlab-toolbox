@@ -4,7 +4,7 @@ import json
 from dataclasses import asdict
 from typing import List
 
-from ..models import Group, Project, MergeRequest, Pipeline, Job
+from ..models import Group, Project, MergeRequest, Pipeline, Job, PipelineSchedule
 
 
 class JSONFormatter:
@@ -81,3 +81,15 @@ class JSONFormatter:
             JSON string
         """
         return json.dumps([asdict(j) for j in jobs], indent=2)
+
+    @staticmethod
+    def format_pipeline_schedules(schedules: List[PipelineSchedule]) -> str:
+        """Format pipeline schedules as JSON.
+
+        Args:
+            schedules: List of PipelineSchedule objects
+
+        Returns:
+            JSON string
+        """
+        return json.dumps([asdict(s) for s in schedules], indent=2)

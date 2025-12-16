@@ -164,13 +164,13 @@ class MergeRequestsAPI:
                     if latest_status == pipeline_status:
                         if GitLabClient._debug:
                             console.print(
-                                f"[green]✓ MR !{mr.iid} matches latest pipeline status {pipeline_status}[/green]"
+                                f"[green]MR !{mr.iid}: pipeline status is {pipeline_status} ✓[/green]"
                             )
                         filtered_mrs.append(mr)
                     else:
                         if GitLabClient._debug:
                             console.print(
-                                f"[dim]MR !{mr.iid} latest status is {latest_status}, not {pipeline_status}[/dim]"
+                                f"[dim]MR !{mr.iid}: pipeline status is {latest_status} (filtered out)[/dim]"
                             )
                 else:
                     if GitLabClient._debug:

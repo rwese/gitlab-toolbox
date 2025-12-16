@@ -9,12 +9,17 @@ from rich.table import Table
 from rich.tree import Tree
 from rich import box
 
-from ..models import Group, Project, MergeRequest, Pipeline, Job
+from ..models import Group, Project, MergeRequest, Pipeline, Job, PipelineSchedule
 
 # Console for status/info messages (goes to stderr)
 console_stderr = Console(file=sys.stderr)
 # Console for data output (goes to stdout)
 console_stdout = Console(file=sys.stdout)
+
+
+def is_script_context() -> bool:
+    """Return True if stdout is not a TTY (piped/redirected/script context)."""
+    return not sys.stdout.isatty()
 
 
 class DisplayFormatter:
@@ -322,3 +327,95 @@ class DisplayFormatter:
             )
 
         console_stdout.print(table)
+
+    # Pipeline Schedules display methods
+    @staticmethod
+    def display_pipeline_schedules_table(schedules: List[PipelineSchedule]):
+        """Display pipeline schedules as a table."""
+        table = Table(
+            title="CI/CD Pipeline Schedules",
+            box=box.ROUNDED,
+            show_header=True,
+            header_style="bold magenta",
+        )
+
+        table.add_column("ID", justify="right", style="cyan")
+        table.add_column("Description", style="white")
+        table.add_column("Ref", style="yellow")
+        table.add_column("Cron", style="green")
+        table.add_column("Active", style="white")
+        table.add_column("Last Pipeline", style="magenta")
+        table.add_column("Next Run", style="blue")
+
+        for schedule in schedules:
+            active_status = "[green]Yes[/green]" if schedule.active else "[red]No[/red]"
+
+            # Format last pipeline status
+            last_pipeline_status = "[dim]Never run[/dim]"
+            if schedule.last_pipeline:
+                status = schedule.last_pipeline.status
+                status_color = {
+                    "success": "[green]success[/green]",
+                    "failed": "[red]failed[/red]",
+                    "running": "[yellow]running[/yellow]",
+                    "pending": "[dim]pending[/dim]",
+                    "canceled": "[dim]canceled[/dim]",
+                    "skipped": "[dim]skipped[/dim]",
+                }.get(status, status)
+                last_pipeline_status = f"#{schedule.last_pipeline.id} ({status_color})"
+
+            table.add_row(
+                f"#{schedule.id}",
+                schedule.description,
+                schedule.ref,
+                schedule.cron,
+                active_status,
+                last_pipeline_status,
+                schedule.next_run_at,
+            )
+
+        console_stdout.print(table)
+
+    @staticmethod
+    def display_pipeline_schedule_details(schedule: PipelineSchedule):
+        """Display detailed view of a pipeline schedule."""
+        details = f"""[bold]ID:[/bold] #{schedule.id}
+[bold]Description:[/bold] {schedule.description}
+[bold]Ref:[/bold] {schedule.ref}
+[bold]Cron:[/bold] {schedule.cron}
+[bold]Timezone:[/bold] {schedule.cron_timezone}
+[bold]Active:[/bold] {"Yes" if schedule.active else "No"}
+[bold]Next Run:[/bold] {schedule.next_run_at}
+[bold]Created:[/bold] {schedule.created_at}
+[bold]Updated:[/bold] {schedule.updated_at}
+
+[bold]Owner:[/bold]
+  Name: {schedule.owner.name} ({schedule.owner.username})
+  State: {schedule.owner.state}"""
+
+        if schedule.last_pipeline:
+            status = schedule.last_pipeline.status
+            status_color = {
+                "success": "[green]success[/green]",
+                "failed": "[red]failed[/red]",
+                "running": "[yellow]running[/yellow]",
+                "pending": "[dim]pending[/dim]",
+                "canceled": "[dim]canceled[/dim]",
+                "skipped": "[dim]skipped[/dim]",
+            }.get(status, status)
+
+            details += f"""
+
+[bold]Last Pipeline:[/bold]
+  ID: #{schedule.last_pipeline.id}
+  SHA: {schedule.last_pipeline.sha}
+  Ref: {schedule.last_pipeline.ref}
+  Status: {status_color}"""
+
+        if schedule.variables:
+            details += "\n\n[bold]Variables:[/bold]"
+            for var in schedule.variables:
+                details += f"\n  {var.key} = {var.value} ({var.variable_type})"
+
+        panel = Panel(details, title="Pipeline Schedule Details", border_style="blue")
+        console_stdout.print(panel)

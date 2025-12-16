@@ -4,7 +4,7 @@ import csv
 import io
 from typing import List
 
-from ..models import Group, Project, MergeRequest, Pipeline, Job
+from ..models import Group, Project, MergeRequest, Pipeline, Job, PipelineSchedule
 
 
 class CSVFormatter:
@@ -112,7 +112,9 @@ class CSVFormatter:
         output = io.StringIO()
         writer = csv.writer(output)
 
-        writer.writerow(["IID", "Title", "Author", "State", "Source Branch", "Target Branch", "Draft"])
+        writer.writerow(
+            ["IID", "Title", "Author", "State", "Source Branch", "Target Branch", "Draft"]
+        )
 
         for mr in mrs:
             writer.writerow(
@@ -181,6 +183,39 @@ class CSVFormatter:
                     job.status,
                     job.duration if job.duration else "",
                     job.started_at or "",
+                ]
+            )
+
+        return output.getvalue()
+
+    @staticmethod
+    def format_pipeline_schedules(schedules: List[PipelineSchedule]) -> str:
+        """Format pipeline schedules as CSV.
+
+        Args:
+            schedules: List of PipelineSchedule objects
+
+        Returns:
+            CSV string
+        """
+        output = io.StringIO()
+        writer = csv.writer(output)
+
+        writer.writerow(
+            ["ID", "Description", "Ref", "Cron", "Timezone", "Next Run", "Active", "Owner"]
+        )
+
+        for schedule in schedules:
+            writer.writerow(
+                [
+                    schedule.id,
+                    schedule.description,
+                    schedule.ref,
+                    schedule.cron,
+                    schedule.cron_timezone,
+                    schedule.next_run_at,
+                    "Yes" if schedule.active else "No",
+                    schedule.owner.username if schedule.owner else "",
                 ]
             )
 

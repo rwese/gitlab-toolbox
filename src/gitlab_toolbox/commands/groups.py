@@ -8,8 +8,48 @@ from rich.panel import Panel
 
 from ..api.groups import GroupsAPI
 from ..formatters import DisplayFormatter, JSONFormatter, MarkdownFormatter, CSVFormatter
+from ..formatters.format_decorator import format_decorator
 
 console = Console(file=sys.stderr)
+
+
+# Format handlers for groups
+def _format_groups_json(groups, **kwargs):
+    """Format groups as JSON."""
+    print(JSONFormatter.format_groups(groups))
+
+
+def _format_groups_markdown(groups, **kwargs):
+    """Format groups as Markdown."""
+    show_members = kwargs.get("show_members", False)
+    print(MarkdownFormatter.format_groups(groups, show_members=show_members))
+
+
+def _format_groups_csv(groups, **kwargs):
+    """Format groups as CSV."""
+    show_members = kwargs.get("show_members", False)
+    print(CSVFormatter.format_groups(groups, show_members=show_members))
+
+
+def _format_groups_tree(groups, **kwargs):
+    """Format groups as tree."""
+    show_members = kwargs.get("show_members", False)
+    DisplayFormatter.display_groups_as_tree(groups, show_members=show_members)
+
+
+def _format_groups_table(groups, **kwargs):
+    """Format groups as table."""
+    show_members = kwargs.get("show_members", False)
+    DisplayFormatter.display_groups_as_table(groups, show_members=show_members)
+
+
+GROUPS_FORMAT_HANDLERS = {
+    "json": _format_groups_json,
+    "markdown": _format_groups_markdown,
+    "csv": _format_groups_csv,
+    "tree": _format_groups_tree,
+    "table": _format_groups_table,
+}
 
 
 @click.group(name="groups")
@@ -19,11 +59,11 @@ def groups_cli():
 
 
 @groups_cli.command(name="list")
-@click.option(
-    "--format",
-    type=click.Choice(["table", "tree", "json", "markdown", "csv"], case_sensitive=False),
-    default="tree",
-    help="Output format (tree, table, json, markdown, or csv)",
+@format_decorator(
+    formats=["table", "tree", "json", "markdown", "csv"],
+    interactive_default="tree",
+    script_default="csv",
+    format_handlers=GROUPS_FORMAT_HANDLERS,
 )
 @click.option("--include-members", is_flag=True, help="Fetch group members (slower)")
 @click.option(
@@ -34,7 +74,7 @@ def groups_cli():
 @click.option("--summary", is_flag=True, help="Show summary statistics")
 @click.option("--search", help="Search groups by name")
 @click.option("--limit", type=int, help="Maximum number of groups to fetch")
-def list_groups(format, include_members, active_members_only, summary, search, limit):
+def list_groups(format_handler, include_members, active_members_only, summary, search, limit):
     """List all GitLab groups."""
     console.print(
         Panel(
@@ -55,17 +95,8 @@ def list_groups(format, include_members, active_members_only, summary, search, l
         groups_data, fetch_members=include_members, active_members_only=active_members_only
     )
 
-    # Display results
-    if format == "json":
-        print(JSONFormatter.format_groups(groups))
-    elif format == "markdown":
-        print(MarkdownFormatter.format_groups(groups, show_members=include_members))
-    elif format == "csv":
-        print(CSVFormatter.format_groups(groups, show_members=include_members))
-    elif format == "tree":
-        DisplayFormatter.display_groups_as_tree(groups, show_members=include_members)
-    else:
-        DisplayFormatter.display_groups_as_table(groups, show_members=include_members)
+    # Display results using format handler
+    format_handler(groups, show_members=include_members)
 
     # Show summary if requested
     if summary:
@@ -75,11 +106,11 @@ def list_groups(format, include_members, active_members_only, summary, search, l
 
 @groups_cli.command(name="show")
 @click.argument("group_path")
-@click.option(
-    "--format",
-    type=click.Choice(["table", "tree", "json", "markdown", "csv"], case_sensitive=False),
-    default="tree",
-    help="Output format (tree, table, json, markdown, or csv)",
+@format_decorator(
+    formats=["table", "tree", "json", "markdown", "csv"],
+    interactive_default="tree",
+    script_default="csv",
+    format_handlers=GROUPS_FORMAT_HANDLERS,
 )
 @click.option("--include-members", is_flag=True, help="Fetch group members (slower)")
 @click.option(
@@ -87,7 +118,7 @@ def list_groups(format, include_members, active_members_only, summary, search, l
     is_flag=True,
     help="Only show active members (requires --include-members)",
 )
-def show_group(group_path, format, include_members, active_members_only):
+def show_group(group_path, format_handler, include_members, active_members_only):
     """Show details of a specific group and its subgroups."""
     console.print(f"[bold]Searching for group:[/bold] {group_path}")
 
@@ -113,14 +144,5 @@ def show_group(group_path, format, include_members, active_members_only):
         all_groups_data, fetch_members=include_members, active_members_only=active_members_only
     )
 
-    # Display
-    if format == "json":
-        print(JSONFormatter.format_groups(groups))
-    elif format == "markdown":
-        print(MarkdownFormatter.format_groups(groups, show_members=include_members))
-    elif format == "csv":
-        print(CSVFormatter.format_groups(groups, show_members=include_members))
-    elif format == "tree":
-        DisplayFormatter.display_groups_as_tree(groups, show_members=include_members)
-    else:
-        DisplayFormatter.display_groups_as_table(groups, show_members=include_members)
+    # Display using format handler
+    format_handler(groups, show_members=include_members)

@@ -3,7 +3,13 @@
 import click
 
 from .api.client import GitLabClient
-from .commands import groups_cli, projects_cli, mergerequests_cli, pipelines_cli
+from .commands import (
+    groups_cli,
+    projects_cli,
+    mergerequests_cli,
+    pipelines_cli,
+    pipeline_schedules_cli,
+)
 
 
 @click.group()
@@ -23,7 +29,7 @@ def cli(repo_path, debug):
     """GitLab Toolbox - A comprehensive CLI for GitLab operations.
 
     This tool provides commands for managing GitLab groups, projects,
-    merge requests, and CI/CD pipelines using the glab CLI.
+    merge requests, CI/CD pipelines, and pipeline schedules using the glab CLI.
     """
     if repo_path:
         GitLabClient.set_repo_path(repo_path)
@@ -43,6 +49,9 @@ cli.add_command(mergerequests_cli, name="mr")  # Alias for mergerequests
 
 cli.add_command(pipelines_cli)
 cli.add_command(pipelines_cli, name="p")  # Alias for pipelines
+
+cli.add_command(pipeline_schedules_cli)
+cli.add_command(pipeline_schedules_cli, name="ps")  # Alias for pipeline-schedules
 
 
 if __name__ == "__main__":

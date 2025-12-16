@@ -48,6 +48,90 @@ class GitLabClient:
         cls._debug = debug
 
     @classmethod
+    def _run_graphql_query(cls, query: str, variables: Optional[Dict] = None) -> Any:
+        """Run a GraphQL query using glab CLI.
+
+        Args:
+            query: GraphQL query string
+            variables: Optional variables for the query
+
+        Returns:
+            Parsed JSON response
+        """
+        import json
+
+        # For GraphQL, we need to pass variables as JSON
+        if variables:
+            # Convert variables to JSON string
+            variables_json = json.dumps(variables)
+            cmd = [
+                "glab",
+                "api",
+                "graphql",
+                "-f",
+                f"query={query}",
+                "-f",
+                f"variables={variables_json}",
+            ]
+        else:
+            cmd = ["glab", "api", "graphql", "-f", f"query={query}"]
+
+        try:
+            if cls._debug:
+                console.print(f"[dim]Running GraphQL: {query}[/dim]")
+                if variables:
+                    console.print(f"[dim]Variables: {variables}[/dim]")
+                console.print(f"[dim]Command: {' '.join(cmd)}[/dim]")
+                if cls._repo_path:
+                    console.print(f"[dim]Working directory: {cls._repo_path}[/dim]")
+
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, check=True, cwd=cls._repo_path
+            )
+
+            if cls._debug and result.stdout:
+                console.print(
+                    f"[dim]GraphQL Response: {result.stdout[:200]}{'...' if len(result.stdout) > 200 else ''}[/dim]"
+                )
+
+            response = json.loads(result.stdout)
+            return response
+        except subprocess.CalledProcessError as e:
+            error_output = e.stdout.strip() if e.stdout else e.stderr.strip()
+            try:
+                if "{" in error_output:
+                    json_start = error_output.index("{")
+                    json_str = error_output[json_start:]
+                    if "}glab:" in json_str:
+                        json_str = json_str[: json_str.index("}glab:") + 1]
+                    error_data = json.loads(json_str)
+                    if "errors" in error_data:
+                        # Handle GraphQL errors
+                        for error in error_data["errors"]:
+                            console.print(
+                                f"[red]GitLab GraphQL error:[/red] {error.get('message', error)}"
+                            )
+                    elif "message" in error_data:
+                        msg = error_data["message"]
+                        if isinstance(msg, dict) and "base" in msg:
+                            base_msgs = msg["base"]
+                            if isinstance(base_msgs, list):
+                                console.print(
+                                    f"[red]GitLab GraphQL error:[/red] {' '.join(base_msgs)}"
+                                )
+                            else:
+                                console.print(f"[red]GitLab GraphQL error:[/red] {msg}")
+                        else:
+                            console.print(f"[red]GitLab GraphQL error:[/red] {msg}")
+                    else:
+                        console.print(f"[red]GitLab GraphQL error:[/red] {error_data}")
+                else:
+                    console.print(f"[red]GitLab GraphQL error:[/red] {error_output}")
+            except json.JSONDecodeError:
+                console.print(f"[red]GitLab GraphQL error:[/red] {error_output}")
+            raise
+
+    @classmethod
     def _run_glab_command(
         cls, endpoint: str, params: Optional[Dict] = None, method: str = "GET"
     ) -> Any:
