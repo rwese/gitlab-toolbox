@@ -1,5 +1,7 @@
 """Groups command implementation."""
 
+import sys
+
 import click
 from rich.console import Console
 from rich.panel import Panel
@@ -7,7 +9,7 @@ from rich.panel import Panel
 from ..api.groups import GroupsAPI
 from ..formatters import DisplayFormatter, JSONFormatter, MarkdownFormatter, CSVFormatter
 
-console = Console()
+console = Console(file=sys.stderr)
 
 
 @click.group(name="groups")
@@ -24,7 +26,11 @@ def groups_cli():
     help="Output format (tree, table, json, markdown, or csv)",
 )
 @click.option("--include-members", is_flag=True, help="Fetch group members (slower)")
-@click.option("--active-members-only", is_flag=True, help="Only show active members (requires --include-members)")
+@click.option(
+    "--active-members-only",
+    is_flag=True,
+    help="Only show active members (requires --include-members)",
+)
 @click.option("--summary", is_flag=True, help="Show summary statistics")
 @click.option("--search", help="Search groups by name")
 @click.option("--limit", type=int, help="Maximum number of groups to fetch")
@@ -76,7 +82,11 @@ def list_groups(format, include_members, active_members_only, summary, search, l
     help="Output format (tree, table, json, markdown, or csv)",
 )
 @click.option("--include-members", is_flag=True, help="Fetch group members (slower)")
-@click.option("--active-members-only", is_flag=True, help="Only show active members (requires --include-members)")
+@click.option(
+    "--active-members-only",
+    is_flag=True,
+    help="Only show active members (requires --include-members)",
+)
 def show_group(group_path, format, include_members, active_members_only):
     """Show details of a specific group and its subgroups."""
     console.print(f"[bold]Searching for group:[/bold] {group_path}")

@@ -45,6 +45,19 @@ export GITLAB_DEBUG=1
 gitlab-toolbox mergerequests list
 ```
 
+### Output Behavior
+
+- **STDOUT**: Contains data output (tables, details, JSON) - perfect for piping to other tools
+- **STDERR**: Contains status messages, progress info, and debug output - visible in terminal but excluded from pipes
+
+```bash
+# Data goes to file, status messages stay in terminal
+gitlab-toolbox mergerequests list > mrs.txt
+
+# Only data goes through pipe
+gitlab-toolbox mergerequests list | grep "failed"
+```
+
 ## Usage
 
 ### Groups
@@ -68,13 +81,19 @@ gitlab-toolbox projects show PROJECT_PATH
 ### Merge Requests
 ```bash
 # List merge requests
-gitlab-toolbox mergerequests list [--project PROJECT_PATH] [--state opened|merged|closed|all] [--search QUERY] [--limit N]
+gitlab-toolbox mergerequests list [--project PROJECT_PATH] [--state opened|merged|closed|all] [--search QUERY] [--author USERNAME] [--no-drafts] [--pipeline-status STATUS] [--limit N]
 
 # Show merge request details
 gitlab-toolbox mergerequests show PROJECT_PATH MR_IID
 
 # Trigger pipelines for your merge requests
 gitlab-toolbox mergerequests list --author your-username --no-drafts --trigger-pipeline
+
+# Find MRs with failed pipelines (considers only the latest pipeline per MR, like GitLab's UI)
+gitlab-toolbox mergerequests list --pipeline-status failed --trigger-pipeline
+
+# Find your draft MRs with running pipelines
+gitlab-toolbox mergerequests list --author your-username --pipeline-status running
 ```
 
 ### CI/CD Pipelines
@@ -93,15 +112,17 @@ gitlab-toolbox pipelines jobs PROJECT_PATH PIPELINE_ID
 
 - **Groups & Users**: Explore GitLab groups, subgroups, and optionally their members with hierarchical visualization
 - **Projects**: List and search projects across groups
-- **Merge Requests**: View, search, and filter merge requests
+- **Merge Requests**: View, search, and filter merge requests with advanced pipeline status filtering
 - **CI/CD Pipelines**: Monitor pipeline status, view jobs, and check artifacts
-- **Performance**: Global `--limit` parameter stops fetching once enough results are retrieved
+- **Pipeline Status Filtering**: Filter merge requests by their latest pipeline status (success, failed, running, etc.), just like GitLab's web interface
+- **Performance**: Optimized API calls with date filtering (last 30 days) and source type restrictions (merge request pipelines only) to reduce data transfer
 - **Search**: Search support for groups, projects, and merge requests where API supports it
 
 ## Common Options
 
 - `--limit N`: Limit the number of results fetched (saves time on large instances)
 - `--search QUERY`: Search for items by name/title (available for groups, projects, merge requests)
+- `--pipeline-status STATUS`: Filter merge requests by latest pipeline status (success, failed, running, pending, canceled, skipped)
 - `--include-members`: Fetch group members (groups only, off by default for better performance)
 
 ## Development

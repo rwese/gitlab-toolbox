@@ -1,5 +1,7 @@
 """Merge Requests command implementation."""
 
+import sys
+
 import click
 from rich.console import Console
 
@@ -8,7 +10,7 @@ from ..api.pipelines import PipelinesAPI
 from ..api.projects import ProjectsAPI
 from ..formatters import DisplayFormatter
 
-console = Console()
+console = Console(file=sys.stderr)
 
 
 @click.group(name="mergerequests")
@@ -28,13 +30,19 @@ def mergerequests_cli():
 @click.option("--search", help="Search merge requests by title or description")
 @click.option("--author", help="Filter by author's username")
 @click.option("--no-drafts", is_flag=True, help="Exclude draft merge requests")
+@click.option(
+    "--pipeline-status",
+    help="Filter by pipeline status (success, failed, running, pending, canceled, skipped)",
+)
 @click.option("--limit", type=int, help="Maximum number of merge requests to fetch")
 @click.option(
     "--trigger-pipeline",
     is_flag=True,
     help="Trigger a new pipeline for each merge request's source branch",
 )
-def list_merge_requests(project, state, search, author, no_drafts, limit, trigger_pipeline):
+def list_merge_requests(
+    project, state, search, author, no_drafts, pipeline_status, limit, trigger_pipeline
+):
     """List merge requests."""
     mrs = MergeRequestsAPI.get_merge_requests(
         project_path=project,
@@ -42,6 +50,7 @@ def list_merge_requests(project, state, search, author, no_drafts, limit, trigge
         search=search,
         author_username=author,
         exclude_drafts=no_drafts,
+        pipeline_status=pipeline_status,
         limit=limit,
     )
 
@@ -57,29 +66,21 @@ def list_merge_requests(project, state, search, author, no_drafts, limit, trigge
         for mr in mrs:
             # Get project path from project_id
             if not mr.project_id:
-                console.print(
-                    f"[yellow]Skipping !{mr.iid} - no project_id available[/yellow]"
-                )
+                console.print(f"[yellow]Skipping !{mr.iid} - no project_id available[/yellow]")
                 continue
 
             project_obj = ProjectsAPI.get_project_by_id(mr.project_id)
             if not project_obj:
-                console.print(
-                    f"[yellow]Skipping !{mr.iid} - could not fetch project info[/yellow]"
-                )
+                console.print(f"[yellow]Skipping !{mr.iid} - could not fetch project info[/yellow]")
                 continue
 
             console.print(
                 f"[cyan]Triggering pipeline for !{mr.iid} ({project_obj.path_with_namespace}:{mr.source_branch})...[/cyan]"
             )
-            pipeline = PipelinesAPI.trigger_mr_pipeline(
-                project_obj.path_with_namespace, mr.iid
-            )
+            pipeline = PipelinesAPI.trigger_mr_pipeline(project_obj.path_with_namespace, mr.iid)
 
             if pipeline:
-                console.print(
-                    f"  [green]✓[/green] Pipeline #{pipeline.id} triggered successfully"
-                )
+                console.print(f"  [green]✓[/green] Pipeline #{pipeline.id} triggered successfully")
             else:
                 console.print(f"  [red]✗[/red] Failed to trigger pipeline")
 

@@ -1,5 +1,6 @@
 """Pipelines API operations."""
 
+import sys
 from typing import List, Optional
 
 from rich.console import Console
@@ -7,7 +8,7 @@ from rich.console import Console
 from ..models import Pipeline, Job
 from .client import GitLabClient
 
-console = Console()
+console = Console(file=sys.stderr)
 
 
 class PipelinesAPI:
@@ -18,6 +19,8 @@ class PipelinesAPI:
         cls,
         project_path: str,
         status: Optional[str] = None,
+        source: Optional[str] = None,
+        created_after: Optional[str] = None,
         limit: Optional[int] = None,
     ) -> List[Pipeline]:
         """Fetch pipelines for a project.
@@ -25,6 +28,8 @@ class PipelinesAPI:
         Args:
             project_path: The project path
             status: Optional pipeline status filter
+            source: Optional pipeline source filter (e.g., 'merge_request_event', 'push')
+            created_after: Optional ISO 8601 date string to filter pipelines created after this date
             limit: Maximum number of pipelines to fetch
 
         Returns:
@@ -34,6 +39,10 @@ class PipelinesAPI:
         params = {}
         if status:
             params["status"] = status
+        if source:
+            params["source"] = source
+        if created_after:
+            params["created_after"] = created_after
 
         with console.status("[bold green]Fetching pipelines..."):
             pipelines_data = GitLabClient.paginate(
@@ -109,6 +118,26 @@ class PipelinesAPI:
         return cls._parse_pipeline(pipeline_data)
 
     @classmethod
+    def get_mr_pipelines(cls, project_path: str, mr_iid: int) -> List[Pipeline]:
+        """Fetch pipelines for a specific merge request.
+
+        Args:
+            project_path: The project path
+            mr_iid: The merge request IID
+
+        Returns:
+            List of Pipeline objects for this MR
+        """
+        encoded_path = project_path.replace("/", "%2F")
+
+        with console.status(f"[bold green]Fetching pipelines for MR !{mr_iid}..."):
+            pipelines_data = GitLabClient.paginate(
+                f"projects/{encoded_path}/merge_requests/{mr_iid}/pipelines"
+            )
+
+        return [cls._parse_pipeline(p) for p in pipelines_data]
+
+    @classmethod
     def trigger_mr_pipeline(cls, project_path: str, mr_iid: int) -> Optional[Pipeline]:
         """Trigger a new pipeline for a merge request.
 
@@ -122,8 +151,7 @@ class PipelinesAPI:
         encoded_path = project_path.replace("/", "%2F")
 
         pipeline_data = GitLabClient._run_glab_command(
-            f"projects/{encoded_path}/merge_requests/{mr_iid}/pipelines",
-            method="POST"
+            f"projects/{encoded_path}/merge_requests/{mr_iid}/pipelines", method="POST"
         )
 
         if not pipeline_data or isinstance(pipeline_data, list):

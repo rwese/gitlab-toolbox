@@ -1,12 +1,14 @@
 """Pipelines command implementation."""
 
+import sys
+
 import click
 from rich.console import Console
 
 from ..api.pipelines import PipelinesAPI
 from ..formatters import DisplayFormatter
 
-console = Console()
+console = Console(file=sys.stderr)
 
 
 @click.group(name="pipelines")

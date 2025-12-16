@@ -2,11 +2,12 @@
 
 import json
 import subprocess
+import sys
 from typing import Any, Dict, List, Optional
 
 from rich.console import Console
 
-console = Console()
+console = Console(file=sys.stderr)
 
 
 class GitLabClient:
@@ -47,7 +48,9 @@ class GitLabClient:
         cls._debug = debug
 
     @classmethod
-    def _run_glab_command(cls, endpoint: str, params: Optional[Dict] = None, method: str = "GET") -> Any:
+    def _run_glab_command(
+        cls, endpoint: str, params: Optional[Dict] = None, method: str = "GET"
+    ) -> Any:
         """Run a glab API command and return JSON result.
 
         Args:
@@ -81,15 +84,13 @@ class GitLabClient:
                     console.print(f"[dim]Working directory: {cls._repo_path}[/dim]")
 
             result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                check=True,
-                cwd=cls._repo_path
+                cmd, capture_output=True, text=True, check=True, cwd=cls._repo_path
             )
 
             if cls._debug and result.stdout:
-                console.print(f"[dim]Response: {result.stdout[:200]}{'...' if len(result.stdout) > 200 else ''}[/dim]")
+                console.print(
+                    f"[dim]Response: {result.stdout[:200]}{'...' if len(result.stdout) > 200 else ''}[/dim]"
+                )
 
             return json.loads(result.stdout) if result.stdout else []
         except subprocess.CalledProcessError as e:
@@ -105,7 +106,7 @@ class GitLabClient:
                     json_str = error_output[json_start:]
                     # Try to find the end of the JSON object
                     if "}glab:" in json_str:
-                        json_str = json_str[:json_str.index("}glab:") + 1]
+                        json_str = json_str[: json_str.index("}glab:") + 1]
 
                     error_data = json.loads(json_str)
                     if "message" in error_data:

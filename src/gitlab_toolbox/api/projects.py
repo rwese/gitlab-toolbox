@@ -1,5 +1,6 @@
 """Projects API operations."""
 
+import sys
 from typing import List, Optional
 
 from rich.console import Console
@@ -7,7 +8,7 @@ from rich.console import Console
 from ..models import Project
 from .client import GitLabClient
 
-console = Console()
+console = Console(file=sys.stderr)
 
 
 class ProjectsAPI:
@@ -38,9 +39,7 @@ class ProjectsAPI:
             if group_path:
                 # Get group ID first
                 groups = GitLabClient._run_glab_command("groups", {"search": group_path})
-                matching_group = next(
-                    (g for g in groups if g.get("full_path") == group_path), None
-                )
+                matching_group = next((g for g in groups if g.get("full_path") == group_path), None)
                 if not matching_group:
                     console.print(f"[yellow]Group '{group_path}' not found[/yellow]")
                     return []

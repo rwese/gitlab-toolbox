@@ -43,7 +43,7 @@ gitlab-toolbox projects show PROJECT_PATH
 
 ### Merge Requests
 ```bash
-gitlab-toolbox mergerequests list [--project PROJECT_PATH] [--state opened|merged|closed|all] [--search QUERY] [--limit N]
+gitlab-toolbox mergerequests list [--project PROJECT_PATH] [--state opened|merged|closed|all] [--search QUERY] [--author USERNAME] [--no-drafts] [--pipeline-status STATUS] [--limit N]
 gitlab-toolbox mergerequests show PROJECT_PATH MR_IID
 ```
 

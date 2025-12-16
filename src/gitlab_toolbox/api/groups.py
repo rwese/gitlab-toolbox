@@ -1,5 +1,6 @@
 """Groups API operations."""
 
+import sys
 from typing import List
 
 from rich.console import Console
@@ -7,7 +8,7 @@ from rich.console import Console
 from ..models import Group, GroupMember
 from .client import GitLabClient
 
-console = Console()
+console = Console(file=sys.stderr)
 
 
 class GroupsAPI:

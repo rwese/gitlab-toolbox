@@ -1,5 +1,6 @@
 """Display formatters for various GitLab entities."""
 
+import sys
 from typing import List
 
 from rich.console import Console
@@ -10,7 +11,10 @@ from rich import box
 
 from ..models import Group, Project, MergeRequest, Pipeline, Job
 
-console = Console()
+# Console for status/info messages (goes to stderr)
+console_stderr = Console(file=sys.stderr)
+# Console for data output (goes to stdout)
+console_stdout = Console(file=sys.stdout)
 
 
 class DisplayFormatter:
@@ -83,7 +87,7 @@ class DisplayFormatter:
             for group in groups:
                 add_group_to_table(group)
 
-        console.print(table)
+        console_stdout.print(table)
 
     @staticmethod
     def display_groups_as_tree(groups: List[Group], show_members: bool = True):
@@ -111,7 +115,7 @@ class DisplayFormatter:
         for group in groups:
             add_group_to_tree(tree, group)
 
-        console.print(tree)
+        console_stdout.print(tree)
 
     @staticmethod
     def display_groups_summary(groups: List[Group]):
@@ -136,7 +140,7 @@ class DisplayFormatter:
             title="Summary",
             border_style="blue",
         )
-        console.print(summary)
+        console_stdout.print(summary)
 
     # Projects display methods
     @staticmethod
@@ -164,7 +168,7 @@ class DisplayFormatter:
                 project.description or "",
             )
 
-        console.print(table)
+        console_stdout.print(table)
 
     @staticmethod
     def display_project_details(project: Project):
@@ -172,15 +176,15 @@ class DisplayFormatter:
         details = f"""[bold cyan]{project.name}[/bold cyan]
 [dim]{project.path_with_namespace}[/dim]
 
-[bold]Description:[/bold] {project.description or 'N/A'}
+[bold]Description:[/bold] {project.description or "N/A"}
 [bold]Visibility:[/bold] {project.visibility}
-[bold]Default Branch:[/bold] {project.default_branch or 'N/A'}
+[bold]Default Branch:[/bold] {project.default_branch or "N/A"}
 [bold]Stars:[/bold] {project.star_count}
 [bold]Forks:[/bold] {project.forks_count}
 [bold]URL:[/bold] {project.web_url}"""
 
         panel = Panel(details, title="Project Details", border_style="blue")
-        console.print(panel)
+        console_stdout.print(panel)
 
     # Merge Requests display methods
     @staticmethod
@@ -217,7 +221,7 @@ class DisplayFormatter:
                 draft_marker,
             )
 
-        console.print(table)
+        console_stdout.print(table)
 
     @staticmethod
     def display_merge_request_details(mr: MergeRequest):
@@ -231,14 +235,14 @@ class DisplayFormatter:
 [bold]Draft:[/bold] {mr.draft or mr.work_in_progress}
 [bold]Created:[/bold] {mr.created_at}
 [bold]Updated:[/bold] {mr.updated_at}
-[bold]Merged:[/bold] {mr.merged_at or 'N/A'}
+[bold]Merged:[/bold] {mr.merged_at or "N/A"}
 [bold]URL:[/bold] {mr.web_url}
 
 [bold]Description:[/bold]
-{mr.description or 'No description'}"""
+{mr.description or "No description"}"""
 
         panel = Panel(details, title="Merge Request Details", border_style="blue")
-        console.print(panel)
+        console_stdout.print(panel)
 
     # Pipelines display methods
     @staticmethod
@@ -279,7 +283,7 @@ class DisplayFormatter:
                 pipeline.created_at,
             )
 
-        console.print(table)
+        console_stdout.print(table)
 
     @staticmethod
     def display_pipeline_jobs(jobs: List[Job]):
@@ -317,4 +321,4 @@ class DisplayFormatter:
                 job.started_at or "N/A",
             )
 
-        console.print(table)
+        console_stdout.print(table)
