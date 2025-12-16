@@ -67,7 +67,7 @@ class ProjectsAPI:
         encoded_path = project_path.replace("/", "%2F")
 
         with console.status(f"[bold green]Fetching project {project_path}..."):
-            project_data = GitLabClient._run_api_request(f"projects/{encoded_path}")
+            project_data = GitLabClient._run_api_request_optional(f"projects/{encoded_path}")
 
         if not project_data or isinstance(project_data, list):
             return None
@@ -84,7 +84,7 @@ class ProjectsAPI:
         Returns:
             Project object or None if not found
         """
-        project_data = GitLabClient._run_api_request(f"projects/{project_id}")
+        project_data = GitLabClient._run_api_request_optional(f"projects/{project_id}")
 
         if not project_data or isinstance(project_data, list):
             return None

@@ -303,6 +303,35 @@ class GitLabClient:
             console.print(f"[red]GitLab API request failed:[/red] {e}")
             raise
 
+    @classmethod
+    def _run_api_request_optional(
+        cls, endpoint: str, params: Optional[Dict] = None, method: str = "GET"
+    ) -> Optional[Any]:
+        """Run a GitLab API request, returning None for 404 responses instead of raising.
+
+        This method is useful for API calls where a missing resource (404) is a valid
+        response that should be handled gracefully rather than as an error.
+
+        Args:
+            endpoint: The API endpoint to call
+            params: Optional query parameters or body data
+            method: HTTP method
+
+        Returns:
+            Parsed JSON response or None if resource not found (404)
+        """
+        try:
+            return cls._run_api_request(endpoint, params, method)
+        except requests.HTTPError as e:
+            # Check for 404 in multiple ways
+            is_404 = (e.response and e.response.status_code == 404) or (
+                "404" in str(e) or "Not Found" in str(e)
+            )
+            if is_404:
+                return None
+            # Re-raise other HTTP errors
+            raise
+
     # Legacy alias for backward compatibility
     @classmethod
     def _run_glab_command(
@@ -344,6 +373,65 @@ class GitLabClient:
         while True:
             params["page"] = str(page)
             result = cls._run_api_request(endpoint, params)
+
+            if not result or not isinstance(result, list):
+                break
+
+            items.extend(result)
+
+            # Check if we've hit the limit
+            if limit and len(items) >= limit:
+                items = items[:limit]
+                break
+
+            page += 1
+
+            # Check if there are more pages
+            if len(result) < per_page:
+                break
+
+        return items
+
+    @classmethod
+    def paginate_optional(
+        cls,
+        endpoint: str,
+        params: Optional[Dict] = None,
+        per_page: int = 100,
+        limit: Optional[int] = None,
+    ) -> Optional[List[Dict]]:
+        """Fetch all pages from a paginated endpoint, returning None if endpoint returns 404.
+
+        This method is useful for list operations where a missing container resource (404)
+        should be handled gracefully rather than as an error.
+
+        Args:
+            endpoint: The API endpoint to call
+            params: Optional query parameters
+            per_page: Number of items per page (default 100, max 100)
+            limit: Maximum number of items to fetch (None for all)
+
+        Returns:
+            List of all items from all pages (up to limit), or None if endpoint returns 404
+        """
+        params = params or {}
+
+        # Optimize per_page based on limit to avoid unnecessary API calls
+        if limit:
+            per_page = min(limit, per_page)
+
+        params["per_page"] = str(per_page)
+
+        items = []
+        page = 1
+
+        while True:
+            params["page"] = str(page)
+            result = cls._run_api_request_optional(endpoint, params)
+
+            if result is None:
+                # Endpoint returned 404, return None to indicate resource not found
+                return None
 
             if not result or not isinstance(result, list):
                 break

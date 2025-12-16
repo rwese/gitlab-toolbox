@@ -3,6 +3,7 @@
 import sys
 from typing import List, Optional
 
+import requests
 from rich.console import Console
 
 from ..models import MergeRequest
@@ -55,11 +56,21 @@ class MergeRequestsAPI:
         with console.status("[bold green]Fetching merge requests..."):
             if project_path:
                 encoded_path = project_path.replace("/", "%2F")
-                mrs_data = GitLabClient.paginate(
+                mrs_data = GitLabClient.paginate_optional(
                     f"projects/{encoded_path}/merge_requests", params, limit=fetch_limit
                 )
+                if mrs_data is None:
+                    console.print(f"[yellow]Project '{project_path}' not found.[/yellow]")
+                    return []
             else:
-                mrs_data = GitLabClient.paginate("merge_requests", params, limit=fetch_limit)
+                mrs_data = GitLabClient.paginate_optional(
+                    "merge_requests", params, limit=fetch_limit
+                )
+                if mrs_data is None:
+                    console.print(
+                        f"[yellow]Unable to fetch merge requests: endpoint not found[/yellow]"
+                    )
+                    return []
 
         mrs = [cls._parse_merge_request(mr) for mr in mrs_data]
 
@@ -88,7 +99,7 @@ class MergeRequestsAPI:
         encoded_path = project_path.replace("/", "%2F")
 
         with console.status(f"[bold green]Fetching MR !{mr_iid}..."):
-            mr_data = GitLabClient._run_api_request(
+            mr_data = GitLabClient._run_api_request_optional(
                 f"projects/{encoded_path}/merge_requests/{mr_iid}"
             )
 

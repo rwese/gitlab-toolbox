@@ -324,7 +324,7 @@ class PipelineSchedulesAPI:
         encoded_path = project_path.replace("/", "%2F")
 
         with console.status(f"[bold green]Fetching pipeline schedule #{schedule_id}..."):
-            schedule_data = GitLabClient._run_api_request(
+            schedule_data = GitLabClient._run_api_request_optional(
                 f"projects/{encoded_path}/pipeline_schedules/{schedule_id}"
             )
 
