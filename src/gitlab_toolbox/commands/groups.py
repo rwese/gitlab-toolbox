@@ -7,49 +7,10 @@ from rich.console import Console
 from rich.panel import Panel
 
 from ..api.groups import GroupsAPI
-from ..formatters import DisplayFormatter, JSONFormatter, MarkdownFormatter, CSVFormatter
+from ..formatters import DisplayFormatter
 from ..formatters.format_decorator import format_decorator
 
 console = Console(file=sys.stderr)
-
-
-# Format handlers for groups
-def _format_groups_json(groups, **kwargs):
-    """Format groups as JSON."""
-    print(JSONFormatter.format_groups(groups))
-
-
-def _format_groups_markdown(groups, **kwargs):
-    """Format groups as Markdown."""
-    show_members = kwargs.get("show_members", False)
-    print(MarkdownFormatter.format_groups(groups, show_members=show_members))
-
-
-def _format_groups_csv(groups, **kwargs):
-    """Format groups as CSV."""
-    show_members = kwargs.get("show_members", False)
-    print(CSVFormatter.format_groups(groups, show_members=show_members))
-
-
-def _format_groups_tree(groups, **kwargs):
-    """Format groups as tree."""
-    show_members = kwargs.get("show_members", False)
-    DisplayFormatter.display_groups_as_tree(groups, show_members=show_members)
-
-
-def _format_groups_table(groups, **kwargs):
-    """Format groups as table."""
-    show_members = kwargs.get("show_members", False)
-    DisplayFormatter.display_groups_as_table(groups, show_members=show_members)
-
-
-GROUPS_FORMAT_HANDLERS = {
-    "json": _format_groups_json,
-    "markdown": _format_groups_markdown,
-    "csv": _format_groups_csv,
-    "tree": _format_groups_tree,
-    "table": _format_groups_table,
-}
 
 
 @click.group(name="groups")
@@ -63,7 +24,7 @@ def groups_cli():
     formats=["table", "tree", "json", "markdown", "csv"],
     interactive_default="tree",
     script_default="csv",
-    format_handlers=GROUPS_FORMAT_HANDLERS,
+    entity_type="groups",
 )
 @click.option("--include-members", is_flag=True, help="Fetch group members (slower)")
 @click.option(
@@ -110,7 +71,7 @@ def list_groups(format_handler, include_members, active_members_only, summary, s
     formats=["table", "tree", "json", "markdown", "csv"],
     interactive_default="tree",
     script_default="csv",
-    format_handlers=GROUPS_FORMAT_HANDLERS,
+    entity_type="groups",
 )
 @click.option("--include-members", is_flag=True, help="Fetch group members (slower)")
 @click.option(

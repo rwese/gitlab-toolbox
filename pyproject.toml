@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "gitlab-toolbox"
 version = "1.0.0"
-description = "A CLI toolbox for GitLab operations using glab"
+description = "A CLI toolbox for GitLab operations using direct HTTP API calls"
 readme = "README.md"
 requires-python = ">=3.8"
 authors = [
@@ -24,6 +24,8 @@ classifiers = [
 dependencies = [
     "click>=8.0",
     "rich>=13.0",
+    "requests>=2.25.0",
+    "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]

@@ -4,13 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-GitLab Toolbox is a comprehensive Python CLI tool for GitLab operations, providing commands for managing groups, projects, merge requests, and CI/CD pipelines. The tool wraps the `glab` CLI to provide a user-friendly interface with rich formatting options.
+GitLab Toolbox is a comprehensive Python CLI tool for GitLab operations, providing commands for managing groups, projects, merge requests, and CI/CD pipelines. The tool uses direct HTTP API calls to GitLab for maximum compatibility and no external dependencies.
 
 ## Prerequisites
 
-- **glab CLI**: The tool depends on the `glab` command-line tool for GitLab API access. Must be installed and configured.
 - **Python 3.8+**: Required for the package
-- **Python dependencies**: `click` (CLI framework) and `rich` (terminal formatting)
+- **Python dependencies**: `click` (CLI framework), `rich` (terminal formatting), and `requests` (HTTP client)
+- **GitLab Access Token**: Personal access token for authenticated operations (optional for public GitLab.com data)
 
 ## Installation & Setup
 

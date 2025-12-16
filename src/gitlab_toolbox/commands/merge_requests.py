@@ -8,50 +8,9 @@ from rich.console import Console
 from ..api.merge_requests import MergeRequestsAPI
 from ..api.pipelines import PipelinesAPI
 from ..api.projects import ProjectsAPI
-from ..formatters import DisplayFormatter, JSONFormatter, CSVFormatter
 from ..formatters.format_decorator import format_decorator
 
 console = Console(file=sys.stderr)
-
-
-# Format handlers for merge requests
-def _format_merge_requests_json(mrs, **kwargs):
-    """Format merge requests as JSON."""
-    print(JSONFormatter.format_merge_requests(mrs))
-
-
-def _format_merge_requests_csv(mrs, **kwargs):
-    """Format merge requests as CSV."""
-    print(CSVFormatter.format_merge_requests(mrs))
-
-
-def _format_merge_requests_table(mrs, **kwargs):
-    """Format merge requests as table."""
-    DisplayFormatter.display_merge_requests_table(mrs)
-
-
-MERGE_REQUESTS_FORMAT_HANDLERS = {
-    "json": _format_merge_requests_json,
-    "csv": _format_merge_requests_csv,
-    "table": _format_merge_requests_table,
-}
-
-
-# Format handlers for merge request show
-def _format_merge_request_details(mr, **kwargs):
-    """Format merge request as details."""
-    DisplayFormatter.display_merge_request_details(mr)
-
-
-def _format_merge_request_json(mr, **kwargs):
-    """Format merge request as JSON."""
-    print(JSONFormatter.format_merge_requests([mr]))
-
-
-MERGE_REQUEST_SHOW_FORMAT_HANDLERS = {
-    "details": _format_merge_request_details,
-    "json": _format_merge_request_json,
-}
 
 
 @click.group(name="mergerequests")
@@ -65,7 +24,7 @@ def mergerequests_cli():
     formats=["table", "json", "csv"],
     interactive_default="table",
     script_default="csv",
-    format_handlers=MERGE_REQUESTS_FORMAT_HANDLERS,
+    entity_type="merge_requests",
 )
 @click.option("--project", help="Filter by project path")
 @click.option(
@@ -148,7 +107,7 @@ def list_merge_requests(
     formats=["details", "json"],
     interactive_default="details",
     script_default="json",
-    format_handlers=MERGE_REQUEST_SHOW_FORMAT_HANDLERS,
+    entity_type="merge_request",
 )
 def show_merge_request(project_path, mr_iid, format_handler):
     """Show details of a specific merge request."""

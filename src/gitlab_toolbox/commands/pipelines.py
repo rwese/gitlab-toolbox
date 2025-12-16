@@ -6,56 +6,9 @@ import click
 from rich.console import Console
 
 from ..api.pipelines import PipelinesAPI
-from ..formatters import DisplayFormatter, JSONFormatter, CSVFormatter
 from ..formatters.format_decorator import format_decorator
 
 console = Console(file=sys.stderr)
-
-
-# Format handlers for pipelines
-def _format_pipelines_json(pipelines, **kwargs):
-    """Format pipelines as JSON."""
-    print(JSONFormatter.format_pipelines(pipelines))
-
-
-def _format_pipelines_csv(pipelines, **kwargs):
-    """Format pipelines as CSV."""
-    print(CSVFormatter.format_pipelines(pipelines))
-
-
-def _format_pipelines_table(pipelines, **kwargs):
-    """Format pipelines as table."""
-    DisplayFormatter.display_pipelines_table(pipelines)
-
-
-PIPELINES_FORMAT_HANDLERS = {
-    "json": _format_pipelines_json,
-    "csv": _format_pipelines_csv,
-    "table": _format_pipelines_table,
-}
-
-
-# Format handlers for pipeline jobs
-def _format_jobs_json(jobs, **kwargs):
-    """Format jobs as JSON."""
-    print(JSONFormatter.format_jobs(jobs))
-
-
-def _format_jobs_csv(jobs, **kwargs):
-    """Format jobs as CSV."""
-    print(CSVFormatter.format_jobs(jobs))
-
-
-def _format_jobs_table(jobs, **kwargs):
-    """Format jobs as table."""
-    DisplayFormatter.display_pipeline_jobs(jobs)
-
-
-PIPELINE_JOBS_FORMAT_HANDLERS = {
-    "json": _format_jobs_json,
-    "csv": _format_jobs_csv,
-    "table": _format_jobs_table,
-}
 
 
 @click.group(name="pipelines")
@@ -69,7 +22,7 @@ def pipelines_cli():
     formats=["table", "json", "csv"],
     interactive_default="table",
     script_default="csv",
-    format_handlers=PIPELINES_FORMAT_HANDLERS,
+    entity_type="pipelines",
 )
 @click.option("--project", required=True, help="Project path")
 @click.option(
@@ -118,7 +71,7 @@ def show_pipeline(project, pipeline_id):
     formats=["table", "json", "csv"],
     interactive_default="table",
     script_default="csv",
-    format_handlers=PIPELINE_JOBS_FORMAT_HANDLERS,
+    entity_type="jobs",
 )
 @click.option("--project", required=True, help="Project path")
 @click.argument("pipeline_id", type=int)

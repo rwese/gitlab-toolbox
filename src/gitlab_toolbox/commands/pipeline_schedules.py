@@ -6,33 +6,9 @@ import click
 from rich.console import Console
 
 from ..api.pipeline_schedules import PipelineSchedulesAPI
-from ..formatters import DisplayFormatter, JSONFormatter, CSVFormatter
 from ..formatters.format_decorator import format_decorator
 
 console = Console(file=sys.stderr)
-
-
-# Format handlers for pipeline schedules
-def _format_pipeline_schedules_json(schedules, **kwargs):
-    """Format pipeline schedules as JSON."""
-    print(JSONFormatter.format_pipeline_schedules(schedules))
-
-
-def _format_pipeline_schedules_csv(schedules, **kwargs):
-    """Format pipeline schedules as CSV."""
-    print(CSVFormatter.format_pipeline_schedules(schedules))
-
-
-def _format_pipeline_schedules_table(schedules, **kwargs):
-    """Format pipeline schedules as table."""
-    DisplayFormatter.display_pipeline_schedules_table(schedules)
-
-
-PIPELINE_SCHEDULES_FORMAT_HANDLERS = {
-    "json": _format_pipeline_schedules_json,
-    "csv": _format_pipeline_schedules_csv,
-    "table": _format_pipeline_schedules_table,
-}
 
 
 @click.group(name="pipeline-schedules")
@@ -46,7 +22,7 @@ def pipeline_schedules_cli():
     formats=["table", "json", "csv"],
     interactive_default="table",
     script_default="csv",
-    format_handlers=PIPELINE_SCHEDULES_FORMAT_HANDLERS,
+    entity_type="pipeline_schedules",
 )
 @click.option("--project", required=True, help="Project path")
 @click.option(
@@ -108,3 +84,40 @@ def list_schedule_pipelines(project, schedule_id, limit):
 
     DisplayFormatter.display_pipelines_table(pipelines)
     console.print(f"\n[dim]Total pipelines: {len(pipelines)}[/dim]")
+
+
+@pipeline_schedules_cli.command(name="trigger")
+@click.option("--project", required=True, help="Project path")
+@click.argument("schedule_id", type=int)
+@click.option(
+    "--format",
+    type=click.Choice(["table", "json", "csv"], case_sensitive=False),
+    default="table",
+    help="Output format",
+)
+def trigger_pipeline_schedule(project, schedule_id, format):
+    """Trigger a pipeline schedule to run immediately."""
+    pipeline_data = PipelineSchedulesAPI.trigger_schedule(project, schedule_id)
+
+    if not pipeline_data:
+        sys.exit(1)
+
+    # Display the created pipeline information
+    from ..formatters import DisplayFormatter
+    from ..api.pipelines import PipelinesAPI
+
+    # Parse the pipeline data
+    pipeline = PipelinesAPI._parse_pipeline(pipeline_data)
+
+    if format == "json":
+        import json
+
+        console.print(json.dumps(pipeline_data, indent=2))
+    elif format == "csv":
+        # For CSV, show basic pipeline info
+        console.print(f"ID,Status,Ref,SHA,Created At")
+        console.print(
+            f"{pipeline.id},{pipeline.status},{pipeline.ref},{pipeline.sha},{pipeline.created_at}"
+        )
+    else:  # table format
+        DisplayFormatter.display_pipeline_details(pipeline)

@@ -324,7 +324,7 @@ class PipelineSchedulesAPI:
         encoded_path = project_path.replace("/", "%2F")
 
         with console.status(f"[bold green]Fetching pipeline schedule #{schedule_id}..."):
-            schedule_data = GitLabClient._run_glab_command(
+            schedule_data = GitLabClient._run_api_request(
                 f"projects/{encoded_path}/pipeline_schedules/{schedule_id}"
             )
 
@@ -374,6 +374,44 @@ class PipelineSchedulesAPI:
             )
 
         return pipelines
+
+    @classmethod
+    def trigger_schedule(cls, project_path: str, schedule_id: int) -> Optional[dict]:
+        """Trigger a pipeline schedule to run immediately.
+
+        Args:
+            project_path: The project path
+            schedule_id: The schedule ID
+
+        Returns:
+            Pipeline data if successful, None if failed
+        """
+        encoded_path = project_path.replace("/", "%2F")
+
+        with console.status(f"[bold green]Triggering pipeline schedule #{schedule_id}..."):
+            try:
+                pipeline_data = GitLabClient._run_api_request(
+                    f"projects/{encoded_path}/pipeline_schedules/{schedule_id}/play", method="POST"
+                )
+
+                if pipeline_data and isinstance(pipeline_data, dict):
+                    console.print(
+                        f"[green]✓ Successfully triggered pipeline schedule #{schedule_id}[/green]"
+                    )
+                    if GitLabClient._debug:
+                        console.print(f"[dim]Pipeline created: {pipeline_data}[/dim]")
+                    return pipeline_data
+                else:
+                    console.print(
+                        f"[red]✗ Failed to trigger pipeline schedule #{schedule_id}[/red]"
+                    )
+                    return None
+
+            except Exception as e:
+                console.print(
+                    f"[red]✗ Error triggering pipeline schedule #{schedule_id}: {e}[/red]"
+                )
+                return None
 
     @staticmethod
     def _parse_schedule(data: dict) -> PipelineSchedule:

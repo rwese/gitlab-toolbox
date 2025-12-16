@@ -65,7 +65,7 @@ class PipelinesAPI:
         encoded_path = project_path.replace("/", "%2F")
 
         with console.status(f"[bold green]Fetching pipeline #{pipeline_id}..."):
-            pipeline_data = GitLabClient._run_glab_command(
+            pipeline_data = GitLabClient._run_api_request(
                 f"projects/{encoded_path}/pipelines/{pipeline_id}"
             )
 

@@ -1,40 +1,73 @@
 # GitLab Toolbox
 
-A comprehensive CLI toolbox for GitLab operations, built on top of the `glab` command-line tool.
+A comprehensive CLI toolbox for GitLab operations using direct HTTP API calls.
 
 ## Prerequisites
 
-- [glab](https://gitlab.com/gitlab-org/cli) CLI tool installed and configured
 - Python 3.8 or higher
+- GitLab personal access token (for private repositories and authenticated operations)
+- [uv](https://github.com/astral-sh/uv) package manager (recommended for faster, more reliable installs)
 
 ## Installation
 
 ```bash
 # Install in development mode
-pip install -e .
+uv pip install -e .
 
 # Or install with dev dependencies
-pip install -e ".[dev]"
+uv pip install -e ".[dev]"
+
+# Alternative: sync from lockfile (recommended for reproducible installs)
+uv pip sync
 ```
 
 ## Configuration
 
-Since this tool wraps the `glab` CLI, it needs to run in the context of a Git repository that's connected to your GitLab instance. You can specify the repository path in two ways:
+### Authentication
 
-1. **Using the `--repo-path` flag:**
+Configure your GitLab instance and authentication:
+
+1. **GitLab Instance URL:**
    ```bash
-   gitlab-toolbox --repo-path /path/to/your/gitlab/repo mergerequests list
+   # Using flag (defaults to https://gitlab.com)
+   gitlab-toolbox --gitlab-url https://your-gitlab-instance.com groups list
+
+   # Using environment variable
+   export GITLAB_URL=https://your-gitlab-instance.com
+   gitlab-toolbox groups list
    ```
 
-2. **Using the `GITLAB_REPO_PATH` environment variable:**
+2. **Personal Access Token:**
    ```bash
-   export GITLAB_REPO_PATH=/path/to/your/gitlab/repo
-   gitlab-toolbox mergerequests list
+   # Using flag
+   gitlab-toolbox --token YOUR_TOKEN groups list
+
+   # Using environment variable (recommended for security)
+   export GITLAB_TOKEN=YOUR_TOKEN
+   gitlab-toolbox groups list
    ```
+
+   Supported token environment variables (in order of precedence):
+   - `GITLAB_TOKEN`
+   - `CI_JOB_TOKEN` (for GitLab CI/CD)
+   - `GL_TOKEN`
+
+### Repository Context (Optional)
+
+For operations that benefit from repository context:
+
+```bash
+# Using flag
+gitlab-toolbox --repo-path /path/to/your/gitlab/repo mergerequests list
+
+# Using environment variable
+export GITLAB_REPO_PATH=/path/to/your/gitlab/repo
+gitlab-toolbox mergerequests list
+```
 
 ### Debug Mode
 
-Enable verbose output to see the exact `glab` commands being executed:
+Enable verbose output to see HTTP requests and responses:
 
 ```bash
 # Using flag
@@ -118,6 +151,9 @@ gitlab-toolbox pipeline-schedules list --project PROJECT_PATH [--state active|in
 # Show schedule details (includes owner, last pipeline info, and custom variables)
 gitlab-toolbox pipeline-schedules show --project PROJECT_PATH SCHEDULE_ID
 
+# Trigger a pipeline schedule to run immediately (creates a new pipeline)
+gitlab-toolbox pipeline-schedules trigger --project PROJECT_PATH SCHEDULE_ID [--format table|json|csv]
+
 # List pipelines triggered by a specific schedule
 gitlab-toolbox pipeline-schedules pipelines --project PROJECT_PATH SCHEDULE_ID [--limit N]
 ```
@@ -128,7 +164,7 @@ gitlab-toolbox pipeline-schedules pipelines --project PROJECT_PATH SCHEDULE_ID [
 - **Projects**: List and search projects across groups
 - **Merge Requests**: View, search, and filter merge requests with advanced pipeline status filtering
 - **CI/CD Pipelines**: Monitor pipeline status, view jobs, and check artifacts
-- **CI/CD Pipeline Schedules**: List and view pipeline schedules with state filtering, schedule status, last pipeline run information, and triggered pipeline history (GraphQL-optimized for efficiency)
+- **CI/CD Pipeline Schedules**: List, view, and trigger pipeline schedules with state filtering, schedule status, last pipeline run information, and triggered pipeline history (GraphQL-optimized for efficiency)
 - **Pipeline Status Filtering**: Filter merge requests by their latest pipeline status (success, failed, running, etc.), just like GitLab's web interface
 - **Performance**: Optimized API calls with date filtering (last 30 days) and source type restrictions (merge request pipelines only) to reduce data transfer
 - **Search**: Search support for groups, projects, and merge requests where API supports it
@@ -143,6 +179,9 @@ gitlab-toolbox pipeline-schedules pipelines --project PROJECT_PATH SCHEDULE_ID [
 ## Development
 
 ```bash
+# Sync development dependencies
+uv pip sync --extra dev
+
 # Format code
 black src/
 
@@ -151,4 +190,37 @@ ruff check src/
 
 # Run tests
 pytest
+
+# Generate requirements.txt from pyproject.toml (if needed for CI/CD)
+uv pip compile pyproject.toml -o requirements.txt
+
+# Run the CLI (after installing)
+uv run gitlab-toolbox --help
+```
+
+## CI/CD
+
+For continuous integration, you can use uv with GitHub Actions:
+
+```yaml
+# .github/workflows/ci.yml
+name: CI
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+      - name: Install dependencies
+        run: uv pip install -e ".[dev]"
+      - name: Run tests
+        run: uv run pytest
+      - name: Check formatting
+        run: uv run black --check src/
+      - name: Lint code
+        run: uv run ruff check src/
 ```

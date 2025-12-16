@@ -38,7 +38,7 @@ class ProjectsAPI:
         with console.status("[bold green]Fetching projects..."):
             if group_path:
                 # Get group ID first
-                groups = GitLabClient._run_glab_command("groups", {"search": group_path})
+                groups = GitLabClient._run_api_request("groups", {"search": group_path})
                 matching_group = next((g for g in groups if g.get("full_path") == group_path), None)
                 if not matching_group:
                     console.print(f"[yellow]Group '{group_path}' not found[/yellow]")
@@ -67,7 +67,7 @@ class ProjectsAPI:
         encoded_path = project_path.replace("/", "%2F")
 
         with console.status(f"[bold green]Fetching project {project_path}..."):
-            project_data = GitLabClient._run_glab_command(f"projects/{encoded_path}")
+            project_data = GitLabClient._run_api_request(f"projects/{encoded_path}")
 
         if not project_data or isinstance(project_data, list):
             return None
@@ -84,7 +84,7 @@ class ProjectsAPI:
         Returns:
             Project object or None if not found
         """
-        project_data = GitLabClient._run_glab_command(f"projects/{project_id}")
+        project_data = GitLabClient._run_api_request(f"projects/{project_id}")
 
         if not project_data or isinstance(project_data, list):
             return None

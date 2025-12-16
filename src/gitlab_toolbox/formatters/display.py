@@ -291,6 +291,34 @@ class DisplayFormatter:
         console_stdout.print(table)
 
     @staticmethod
+    def display_pipeline_details(pipeline: Pipeline):
+        """Display details of a single pipeline."""
+        status_color = {
+            "success": "[green]success[/green]",
+            "failed": "[red]failed[/red]",
+            "running": "[yellow]running[/yellow]",
+            "pending": "[dim]pending[/dim]",
+            "canceled": "[dim]canceled[/dim]",
+            "skipped": "[dim]skipped[/dim]",
+        }.get(pipeline.status, pipeline.status)
+
+        duration = f"{pipeline.duration}s" if pipeline.duration else "N/A"
+
+        panel = Panel(
+            f"[bold cyan]Pipeline #{pipeline.id}[/bold cyan]\n\n"
+            f"[bold]Status:[/bold] {status_color}\n"
+            f"[bold]Ref:[/bold] {pipeline.ref}\n"
+            f"[bold]SHA:[/bold] {pipeline.sha}\n"
+            f"[bold]Duration:[/bold] {duration}\n"
+            f"[bold]Created:[/bold] {pipeline.created_at}\n"
+            f"[bold]Updated:[/bold] {pipeline.updated_at or 'N/A'}\n"
+            f"[bold]Web URL:[/bold] {pipeline.web_url or 'N/A'}",
+            title="Pipeline Details",
+            border_style="cyan",
+        )
+        console_stdout.print(panel)
+
+    @staticmethod
     def display_pipeline_jobs(jobs: List[Job]):
         """Display pipeline jobs as a table."""
         table = Table(
