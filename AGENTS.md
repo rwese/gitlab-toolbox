@@ -62,29 +62,45 @@ gitlab-toolbox pipelines show PROJECT_PATH PIPELINE_ID
 gitlab-toolbox pipelines jobs PROJECT_PATH PIPELINE_ID
 ```
 
+### Pipeline Schedules
+
+```bash
+gitlab-toolbox pipeline-schedules list --project PROJECT_PATH [--state active|inactive] [--limit N]
+gitlab-toolbox pipeline-schedules show --project PROJECT_PATH SCHEDULE_ID
+gitlab-toolbox pipeline-schedules trigger --project PROJECT_PATH SCHEDULE_ID
+```
+
 ## Project Structure
 
 ```
 src/gitlab_toolbox/
-├── cli.py              # Main CLI entry point, registers all command groups
-├── api/                # API layer - wraps glab CLI
-│   ├── client.py       # Base GitLabClient with pagination support
-│   ├── groups.py       # Groups API operations
-│   ├── projects.py     # Projects API operations
-│   ├── merge_requests.py  # MRs API operations
-│   └── pipelines.py    # Pipelines/jobs API operations
-├── models/             # Data models (dataclasses)
-│   ├── group.py        # Group and GroupMember models
-│   ├── project.py      # Project model
-│   ├── merge_request.py  # MergeRequest model
-│   └── pipeline.py     # Pipeline and Job models
-├── commands/           # Click command implementations
-│   ├── groups.py       # Groups CLI commands
-│   ├── projects.py     # Projects CLI commands
-│   ├── merge_requests.py  # MRs CLI commands
-│   └── pipelines.py    # Pipelines CLI commands
-└── formatters/         # Display formatters
-    └── display.py      # Rich-based formatters for all entity types
+├── cli.py                    # Main CLI entry point, registers all command groups
+├── api/                      # API layer - wraps glab CLI
+│   ├── client.py             # Base GitLabClient with pagination support
+│   ├── groups.py             # Groups API operations
+│   ├── projects.py           # Projects API operations
+│   ├── merge_requests.py     # MRs API operations
+│   ├── pipelines.py          # Pipelines/jobs API operations
+│   └── pipeline_schedules.py # Pipeline schedules API operations
+├── models/                   # Data models (dataclasses)
+│   ├── group.py              # Group and GroupMember models
+│   ├── project.py            # Project model
+│   ├── merge_request.py      # MergeRequest model
+│   ├── pipeline.py           # Pipeline and Job models
+│   └── pipeline_schedule.py  # PipelineSchedule model
+├── commands/                 # Click command implementations
+│   ├── groups.py             # Groups CLI commands
+│   ├── projects.py           # Projects CLI commands
+│   ├── merge_requests.py     # MRs CLI commands
+│   ├── pipelines.py          # Pipelines CLI commands
+│   └── pipeline_schedules.py # Pipeline schedules CLI commands
+└── formatters/               # Display formatters
+    ├── display.py            # Rich-based formatters for tables and details
+    ├── csv_formatter.py      # CSV output formatter
+    ├── json_formatter.py     # JSON output formatter
+    ├── markdown_formatter.py # Markdown output formatter
+    ├── generic_handlers.py   # Generic format handlers
+    └── format_decorator.py   # Format selection decorator
 ```
 
 ## Architecture
@@ -104,6 +120,46 @@ The codebase follows a layered architecture with clear separation of concerns:
 4. **Search Support**: All APIs that support search (groups, projects, merge requests) expose it via `--search` parameter
 5. **Access Level Mapping**: Translates numeric GitLab access levels (0-50) to human-readable descriptions
 6. **Modular Commands**: Each domain (groups, projects, mergerequests, pipelines) has its own command module for easy extension
+
+## Key Learnings
+
+### Rich Clickable Links
+
+To add clickable links in Rich table outputs, use the `[link=URL]text[/link]` syntax:
+
+```python
+# In display.py formatters
+link = f"[link={entity.web_url}]🔗[/link]" if entity.web_url else ""
+table.add_column("URL", style="dim", no_wrap=True)
+table.add_row(..., link)
+```
+
+This creates clickable 🔗 links that open the URL in the browser when clicked in a compatible terminal.
+
+### Consistent Formatter Patterns
+
+When adding columns to formatters, follow these patterns:
+
+**Rich Display (`display.py`):**
+
+- Add column with `table.add_column("Name", style="...")`
+- Create link with conditional: `link = f"[link={obj.web_url}]🔗[/link]" if obj.web_url else ""`
+- Add row with the link as last parameter
+
+**CSV Formatter (`csv_formatter.py`):**
+
+- Add column name to header: `writer.writerow([..., "URL"])`
+- Add value to row: `obj.web_url or ""`
+
+### Web URL Handling
+
+Always handle `web_url` fields that may be `None`:
+
+```python
+# Safe access pattern
+url = entity.web_url if entity.web_url else ""
+link = f"[link={url}]🔗[/link]" if url else ""
+```
 
 ## Development
 
@@ -140,8 +196,9 @@ To add a new command domain:
 1. Create model in `src/gitlab_toolbox/models/`
 2. Create API wrapper in `src/gitlab_toolbox/api/`
 3. Add display formatters in `src/gitlab_toolbox/formatters/display.py`
-4. Create command module in `src/gitlab_toolbox/commands/`
-5. Register command group in `src/gitlab_toolbox/cli.py`
+4. Add CSV formatter in `src/gitlab_toolbox/formatters/csv_formatter.py`
+5. Create command module in `src/gitlab_toolbox/commands/`
+6. Register command group in `src/gitlab_toolbox/cli.py`
 
 ## Important Implementation Details
 
