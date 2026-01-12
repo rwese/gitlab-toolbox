@@ -1,0 +1,103 @@
+#!/bin/bash
+
+# GitLab Toolbox Pre-commit Hook
+# This hook runs validation checks before commits
+
+set -e
+
+echo "🔍 Running pre-commit validation..."
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+# Check if uv is available
+if command -v uv &> /dev/null; then
+    UV_RUN="uv run"
+else
+    UV_RUN=""
+fi
+
+# Track overall status
+ALL_PASSED=true
+
+# Function to run validation
+run_validation() {
+    local name=$1
+    local command=$2
+    local description=$3
+    
+    echo -n "  Checking $name... "
+    
+    if $command > /dev/null 2>&1; then
+        echo -e "${GREEN}✓${NC} $description"
+    else
+        echo -e "${RED}✗${NC} $description"
+        ALL_PASSED=false
+    fi
+}
+
+echo ""
+echo "📋 Pre-commit Validation for GitLab Toolbox"
+echo "============================================"
+echo ""
+
+# 1. Check code formatting
+echo "1. Code Formatting"
+run_validation "Black" "$UV_RUN black --check src/" "Code is properly formatted"
+
+# 2. Run linter
+echo ""
+echo "2. Linting"
+run_validation "Ruff" "$UV_RUN ruff check src/" "No linting errors found"
+
+# 3. Verify test collection
+echo ""
+echo "3. Test Suite"
+run_validation "Pytest" "$UV_RUN pytest --co -q" "Tests can be collected successfully"
+
+# 4. Check for common issues
+echo ""
+echo "4. Code Quality"
+echo -n "  Python syntax check... "
+if python3 -m py_compile src/gitlab_toolbox/cli.py src/gitlab_toolbox/**/*.py 2>/dev/null; then
+    echo -e "${GREEN}✓${NC} Python syntax is valid"
+else
+    echo -e "${RED}✗${NC} Python syntax errors found"
+    ALL_PASSED=false
+fi
+
+# 5. Check AGENTS.md exists
+echo ""
+echo "5. Agentic Configuration"
+echo -n "  AGENTS.md exists... "
+if [ -f "AGENTS.md" ]; then
+    echo -e "${GREEN}✓${NC} OpenCode instructions file present"
+else
+    echo -e "${RED}✗${NC} AGENTS.md missing"
+    ALL_PASSED=false
+fi
+
+echo -n "  opencode.json exists... "
+if [ -f "opencode.json" ]; then
+    echo -e "${GREEN}✓${NC} OpenCode configuration present"
+else
+    echo -e "${RED}✗${NC} opencode.json missing"
+    ALL_PASSED=false
+fi
+
+echo ""
+echo "============================================"
+
+if $ALL_PASSED; then
+    echo -e "${GREEN}✅ All pre-commit checks passed!${NC}"
+    exit 0
+else
+    echo -e "${RED}❌ Some pre-commit checks failed!${NC}"
+    echo ""
+    echo "Please fix the issues above before committing."
+    echo "You can skip this hook with: git commit --no-verify"
+    exit 1
+fi
