@@ -163,14 +163,19 @@ class DisplayFormatter:
         table.add_column("Stars", justify="right", style="green")
         table.add_column("Forks", justify="right", style="blue")
         table.add_column("Description", style="dim", no_wrap=False)
+        table.add_column("URL", style="dim", no_wrap=True)
 
         for project in projects:
+            # Create clickable link using Rich's link syntax
+            project_link = f"[link={project.web_url}]🔗[/link]" if project.web_url else ""
+
             table.add_row(
                 project.path_with_namespace,
                 project.visibility,
                 str(project.star_count),
                 str(project.forks_count),
                 project.description or "",
+                project_link,
             )
 
         console_stdout.print(table)
@@ -178,15 +183,20 @@ class DisplayFormatter:
     @staticmethod
     def display_project_details(project: Project):
         """Display detailed information about a project."""
-        details = f"""[bold cyan]{project.name}[/bold cyan]
-[dim]{project.path_with_namespace}[/dim]
+        # Create clickable link using Rich's link syntax
+        project_link = (
+            f"[link={project.web_url}]{project.web_url}[/link]" if project.web_url else "N/A"
+        )
 
-[bold]Description:[/bold] {project.description or "N/A"}
-[bold]Visibility:[/bold] {project.visibility}
-[bold]Default Branch:[/bold] {project.default_branch or "N/A"}
-[bold]Stars:[/bold] {project.star_count}
-[bold]Forks:[/bold] {project.forks_count}
-[bold]URL:[/bold] {project.web_url}"""
+        details = f"""[bold cyan]{project.name}[/bold cyan]
+ [dim]{project.path_with_namespace}[/dim]
+
+ [bold]Description:[/bold] {project.description or "N/A"}
+ [bold]Visibility:[/bold] {project.visibility}
+ [bold]Default Branch:[/bold] {project.default_branch or "N/A"}
+ [bold]Stars:[/bold] {project.star_count}
+ [bold]Forks:[/bold] {project.forks_count}
+ [bold]URL:[/bold] {project_link}"""
 
         panel = Panel(details, title="Project Details", border_style="blue")
         console_stdout.print(panel)
@@ -208,6 +218,7 @@ class DisplayFormatter:
         table.add_column("State", style="green")
         table.add_column("Source → Target", style="blue")
         table.add_column("Draft", justify="center", style="red")
+        table.add_column("URL", style="dim", no_wrap=True)
 
         for mr in mrs:
             draft_marker = "✓" if mr.draft or mr.work_in_progress else ""
@@ -217,6 +228,9 @@ class DisplayFormatter:
                 "closed": "[red]closed[/red]",
             }.get(mr.state, mr.state)
 
+            # Create clickable link using Rich's link syntax
+            mr_link = f"[link={mr.web_url}]🔗[/link]" if mr.web_url else ""
+
             table.add_row(
                 f"!{mr.iid}",
                 mr.title,
@@ -224,6 +238,7 @@ class DisplayFormatter:
                 state_color,
                 f"{mr.source_branch} → {mr.target_branch}",
                 draft_marker,
+                mr_link,
             )
 
         console_stdout.print(table)
@@ -266,6 +281,7 @@ class DisplayFormatter:
         table.add_column("SHA", style="dim")
         table.add_column("Duration", justify="right", style="green")
         table.add_column("Created", style="blue")
+        table.add_column("URL", style="dim", no_wrap=True)
 
         for pipeline in pipelines:
             status_color = {
@@ -279,6 +295,9 @@ class DisplayFormatter:
 
             duration = f"{pipeline.duration}s" if pipeline.duration else "N/A"
 
+            # Create clickable link using Rich's link syntax
+            pipeline_link = f"[link={pipeline.web_url}]🔗[/link]" if pipeline.web_url else ""
+
             table.add_row(
                 f"#{pipeline.id}",
                 status_color,
@@ -286,6 +305,7 @@ class DisplayFormatter:
                 pipeline.sha[:8],
                 duration,
                 pipeline.created_at,
+                pipeline_link,
             )
 
         console_stdout.print(table)
@@ -333,6 +353,7 @@ class DisplayFormatter:
         table.add_column("Status", style="white")
         table.add_column("Duration", justify="right", style="green")
         table.add_column("Started", style="blue")
+        table.add_column("URL", style="dim", no_wrap=True)
 
         for job in jobs:
             status_color = {
@@ -346,12 +367,16 @@ class DisplayFormatter:
 
             duration = f"{job.duration:.1f}s" if job.duration else "N/A"
 
+            # Create clickable link using Rich's link syntax
+            job_link = f"[link={job.web_url}]🔗[/link]" if job.web_url else ""
+
             table.add_row(
                 job.name,
                 job.stage,
                 status_color,
                 duration,
                 job.started_at or "N/A",
+                job_link,
             )
 
         console_stdout.print(table)

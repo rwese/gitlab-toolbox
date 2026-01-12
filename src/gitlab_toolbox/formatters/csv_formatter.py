@@ -84,7 +84,7 @@ class CSVFormatter:
         output = io.StringIO()
         writer = csv.writer(output)
 
-        writer.writerow(["Path", "Visibility", "Stars", "Forks", "Description"])
+        writer.writerow(["Path", "Visibility", "Stars", "Forks", "Description", "URL"])
 
         for project in projects:
             writer.writerow(
@@ -94,6 +94,7 @@ class CSVFormatter:
                     project.star_count,
                     project.forks_count,
                     project.description or "",
+                    project.web_url or "",
                 ]
             )
 
@@ -113,7 +114,7 @@ class CSVFormatter:
         writer = csv.writer(output)
 
         writer.writerow(
-            ["IID", "Title", "Author", "State", "Source Branch", "Target Branch", "Draft"]
+            ["IID", "Title", "Author", "State", "Source Branch", "Target Branch", "Draft", "URL"]
         )
 
         for mr in mrs:
@@ -126,6 +127,7 @@ class CSVFormatter:
                     mr.source_branch,
                     mr.target_branch,
                     "Yes" if mr.draft or mr.work_in_progress else "No",
+                    mr.web_url or "",
                 ]
             )
 
@@ -144,7 +146,7 @@ class CSVFormatter:
         output = io.StringIO()
         writer = csv.writer(output)
 
-        writer.writerow(["ID", "Status", "Ref", "SHA", "Duration", "Created"])
+        writer.writerow(["ID", "Status", "Ref", "SHA", "Duration", "Created", "URL"])
 
         for pipeline in pipelines:
             writer.writerow(
@@ -155,6 +157,7 @@ class CSVFormatter:
                     pipeline.sha[:8],
                     pipeline.duration if pipeline.duration else "",
                     pipeline.created_at,
+                    pipeline.web_url or "",
                 ]
             )
 
@@ -173,7 +176,7 @@ class CSVFormatter:
         output = io.StringIO()
         writer = csv.writer(output)
 
-        writer.writerow(["Name", "Stage", "Status", "Duration", "Started"])
+        writer.writerow(["Name", "Stage", "Status", "Duration", "Started", "URL"])
 
         for job in jobs:
             writer.writerow(
@@ -183,6 +186,7 @@ class CSVFormatter:
                     job.status,
                     job.duration if job.duration else "",
                     job.started_at or "",
+                    job.web_url or "",
                 ]
             )
 
