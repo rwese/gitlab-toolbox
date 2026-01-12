@@ -10,16 +10,20 @@ GitLab Toolbox is a comprehensive Python CLI tool for GitLab operations, providi
 
 - **Python 3.8+**: Required for the package
 - **Python dependencies**: `click` (CLI framework), `rich` (terminal formatting), and `requests` (HTTP client)
+- **uv**: Modern Python package manager (preferred over pip)
 - **GitLab Access Token**: Personal access token for authenticated operations (optional for public GitLab.com data)
 
 ## Installation & Setup
 
 ```bash
-# Install in development mode
-pip install -e .
+# Install in development mode with uv
+uv pip install -e .
 
 # Or install with dev dependencies
-pip install -e ".[dev]"
+uv pip install -e ".[dev]"
+
+# Run without installing
+uv run gitlab-toolbox --help
 ```
 
 After installation, the `gitlab-toolbox` command will be available globally.
@@ -27,6 +31,7 @@ After installation, the `gitlab-toolbox` command will be available globally.
 ## Common Commands
 
 ### Groups
+
 ```bash
 # List groups (members NOT fetched by default for speed)
 gitlab-toolbox groups list [--format tree|table] [--include-members] [--summary] [--search QUERY] [--limit N]
@@ -36,18 +41,21 @@ gitlab-toolbox groups show GROUP_PATH [--format tree|table] [--include-members]
 ```
 
 ### Projects
+
 ```bash
 gitlab-toolbox projects list [--group GROUP_PATH] [--search QUERY] [--limit N]
 gitlab-toolbox projects show PROJECT_PATH
 ```
 
 ### Merge Requests
+
 ```bash
 gitlab-toolbox mergerequests list [--project PROJECT_PATH] [--state opened|merged|closed|all] [--search QUERY] [--author USERNAME] [--no-drafts] [--pipeline-status STATUS] [--limit N]
 gitlab-toolbox mergerequests show PROJECT_PATH MR_IID
 ```
 
 ### CI/CD Pipelines
+
 ```bash
 gitlab-toolbox pipelines list PROJECT_PATH [--status running|pending|success|failed|canceled|skipped] [--limit N]
 gitlab-toolbox pipelines show PROJECT_PATH PIPELINE_ID
@@ -100,18 +108,29 @@ The codebase follows a layered architecture with clear separation of concerns:
 ## Development
 
 ### Code Formatting
+
 ```bash
 black src/
 ```
 
 ### Linting
+
 ```bash
 ruff check src/
 ```
 
 ### Testing
+
 ```bash
 pytest
+```
+
+Or using uv to run commands in the project environment:
+
+```bash
+uv run pytest
+uv run black src/
+uv run ruff check src/
 ```
 
 ## Adding New Commands
@@ -127,10 +146,13 @@ To add a new command domain:
 ## Important Implementation Details
 
 ### GitLab API Access
+
 All GitLab API calls are made via `glab api` commands. The tool assumes `glab` is properly configured with authentication. Error handling in `GitLabClient._run_glab_command()` catches both subprocess failures and JSON parsing errors.
 
 ### URL Encoding
+
 Project paths in API calls must be URL-encoded (e.g., `group/project` becomes `group%2Fproject`). This is handled automatically in the API layer using `project_path.replace("/", "%2F")`.
 
 ### Group Hierarchy
+
 GitLab groups have a `parent_id` field that establishes hierarchy. Root groups have `parent_id` as null/None. The `GroupsAPI.build_group_tree()` method uses a two-pass algorithm with dictionary lookup for O(1) parent-child linking.
