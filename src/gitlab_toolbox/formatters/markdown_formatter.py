@@ -156,8 +156,6 @@ class MarkdownFormatter:
         for job in jobs:
             duration = f"{job.duration:.1f}s" if job.duration else "N/A"
             started = job.started_at or "N/A"
-            lines.append(
-                f"| {job.name} | {job.stage} | {job.status} | {duration} | {started} |"
-            )
+            lines.append(f"| {job.name} | {job.stage} | {job.status} | {duration} | {started} |")
 
         return "\n".join(lines)

@@ -1,8 +1,7 @@
 """Format decorator for CLI commands."""
 
-import sys
 from functools import wraps
-from typing import Callable, Dict, List, Any, Optional
+from typing import Callable, Dict, List, Optional
 
 import click
 

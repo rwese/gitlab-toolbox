@@ -1,7 +1,6 @@
 """Generic format handlers for all entity types."""
 
-import sys
-from typing import Dict, Callable, Any, List
+from typing import Dict, Callable, List
 
 from .display import DisplayFormatter
 from .json_formatter import JSONFormatter

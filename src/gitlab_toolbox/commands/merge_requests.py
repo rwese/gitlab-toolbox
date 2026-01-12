@@ -97,7 +97,7 @@ def list_merge_requests(
             if pipeline:
                 console.print(f"  [green]✓[/green] Pipeline #{pipeline.id} triggered successfully")
             else:
-                console.print(f"  [red]✗[/red] Failed to trigger pipeline")
+                console.print("  [red]✗[/red] Failed to trigger pipeline")
 
 
 @mergerequests_cli.command(name="show")

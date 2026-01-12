@@ -6,6 +6,7 @@ from typing import List, Optional
 from rich.console import Console
 
 from ..models import (
+    Pipeline,
     PipelineSchedule,
     PipelineScheduleVariable,
     PipelineScheduleOwner,
@@ -111,8 +112,6 @@ class PipelineSchedulesAPI:
           }
         }
         """
-
-        variables = {"projectPath": project_path, "first": limit or 100}
 
         try:
             with console.status("[bold green]Fetching pipeline schedules with GraphQL..."):

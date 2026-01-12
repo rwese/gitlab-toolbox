@@ -3,7 +3,6 @@
 import sys
 from typing import List, Optional
 
-import requests
 from rich.console import Console
 
 from ..models import MergeRequest
@@ -68,7 +67,7 @@ class MergeRequestsAPI:
                 )
                 if mrs_data is None:
                     console.print(
-                        f"[yellow]Unable to fetch merge requests: endpoint not found[/yellow]"
+                        "[yellow]Unable to fetch merge requests: endpoint not found[/yellow]"
                     )
                     return []
 
@@ -127,8 +126,6 @@ class MergeRequestsAPI:
         """
         if not project_path or not mrs:
             return []
-
-        from .projects import ProjectsAPI
 
         # Get project info to get the full path
         # For now, assume project_path is already the full path

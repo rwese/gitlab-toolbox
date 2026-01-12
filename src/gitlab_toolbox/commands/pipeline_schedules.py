@@ -6,6 +6,7 @@ import click
 from rich.console import Console
 
 from ..api.pipeline_schedules import PipelineSchedulesAPI
+from ..formatters import DisplayFormatter
 from ..formatters.format_decorator import format_decorator
 
 console = Console(file=sys.stderr)
@@ -115,7 +116,7 @@ def trigger_pipeline_schedule(project, schedule_id, format):
         console.print(json.dumps(pipeline_data, indent=2))
     elif format == "csv":
         # For CSV, show basic pipeline info
-        console.print(f"ID,Status,Ref,SHA,Created At")
+        console.print("ID,Status,Ref,SHA,Created At")
         console.print(
             f"{pipeline.id},{pipeline.status},{pipeline.ref},{pipeline.sha},{pipeline.created_at}"
         )
