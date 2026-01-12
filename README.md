@@ -4,6 +4,19 @@ A comprehensive CLI for GitLab operations using direct HTTP API calls with no ex
 
 **Repository**: [https://github.com/rwese/gitlab-toolbox](https://github.com/rwese/gitlab-toolbox)
 
+## Install with uv
+
+```bash
+# Install globally (makes `gitlab-toolbox` command available)
+uv tool install gitlab-toolbox
+
+# Or run directly without installation
+uvx gitlab-toolbox --help
+
+# Or install in development mode
+uv pip install -e .
+```
+
 ## Quickstart
 
 ```bash
@@ -196,3 +209,16 @@ uv run gitlab-toolbox --help
 - Python 3.8+
 - GitLab personal access token (for private repositories)
 - [uv](https://github.com/astral-sh/uv) package manager
+
+### Install uv
+
+```bash
+# macOS/Linux
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Windows (PowerShell)
+powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+
+# Or via pip
+pip install uv
+```
