@@ -7,13 +7,16 @@ A comprehensive CLI for GitLab operations using direct HTTP API calls with no ex
 ## Install with uv
 
 ```bash
-# Install globally (makes `gitlab-toolbox` command available)
-uv tool install gitlab-toolbox
+# Install directly from GitHub (no clone needed)
+uv pip install git+https://github.com/rwese/gitlab-toolbox.git
+
+# Or install as a global tool
+uv tool install git+https://github.com/rwese/gitlab-toolbox.git
 
 # Or run directly without installation
 uvx gitlab-toolbox --help
 
-# Or install in development mode
+# Or install in development mode (from local clone)
 uv pip install -e .
 ```
 
