@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+**Repository**: [https://github.com/rwese/gitlab-toolbox](https://github.com/rwese/gitlab-toolbox)
+
 ## Project Overview
 
 GitLab Toolbox is a comprehensive Python CLI tool for GitLab operations, providing commands for managing groups, projects, merge requests, and CI/CD pipelines. The tool uses direct HTTP API calls to GitLab for maximum compatibility and no external dependencies.
