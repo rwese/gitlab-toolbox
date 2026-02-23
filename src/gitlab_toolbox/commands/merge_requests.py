@@ -5,6 +5,7 @@ import sys
 import click
 from rich.console import Console
 
+from ..api.client import GitLabClient
 from ..api.merge_requests import MergeRequestsAPI
 from ..api.pipelines import PipelinesAPI
 from ..api.projects import ProjectsAPI
@@ -26,7 +27,6 @@ def mergerequests_cli():
     script_default="csv",
     entity_type="merge_requests",
 )
-@click.option("--project", help="Filter by project path")
 @click.option(
     "--state",
     type=click.Choice(["opened", "merged", "closed", "all"], case_sensitive=False),
@@ -48,7 +48,6 @@ def mergerequests_cli():
 )
 def list_merge_requests(
     format_handler,
-    project,
     state,
     search,
     author,
@@ -57,6 +56,7 @@ def list_merge_requests(
     limit,
     trigger_pipeline,
 ):
+    project = GitLabClient._repo_path
     """List merge requests."""
     mrs = MergeRequestsAPI.get_merge_requests(
         project_path=project,

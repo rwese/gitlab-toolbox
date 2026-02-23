@@ -5,6 +5,7 @@ import sys
 import click
 from rich.console import Console
 
+from ..api.client import GitLabClient
 from ..api.pipelines import PipelinesAPI
 from ..formatters.format_decorator import format_decorator
 
@@ -24,7 +25,6 @@ def pipelines_cli():
     script_default="csv",
     entity_type="pipelines",
 )
-@click.option("--project", required=True, help="Project path")
 @click.option(
     "--status",
     type=click.Choice(
@@ -34,7 +34,12 @@ def pipelines_cli():
     help="Filter by pipeline status",
 )
 @click.option("--limit", type=int, help="Maximum number of pipelines to fetch")
-def list_pipelines(format_handler, project, status, limit):
+def list_pipelines(format_handler, status, limit):
+    project = GitLabClient._repo_path
+    if not project:
+        raise click.ClickException(
+            "--project is required (set via --project, GITLAB_TOOLBOX_PROJECT, or run from a git repository with GitLab remote)"
+        )
     """List pipelines for a project."""
     pipelines = PipelinesAPI.get_pipelines(project, status=status, limit=limit)
 
@@ -48,9 +53,13 @@ def list_pipelines(format_handler, project, status, limit):
 
 
 @pipelines_cli.command(name="show")
-@click.option("--project", required=True, help="Project path")
 @click.argument("pipeline_id", type=int)
-def show_pipeline(project, pipeline_id):
+def show_pipeline(pipeline_id):
+    project = GitLabClient._repo_path
+    if not project:
+        raise click.ClickException(
+            "--project is required (set via --project, GITLAB_TOOLBOX_PROJECT, or run from a git repository with GitLab remote)"
+        )
     """Show details of a specific pipeline."""
     pipeline = PipelinesAPI.get_pipeline(project, pipeline_id)
 
@@ -73,9 +82,13 @@ def show_pipeline(project, pipeline_id):
     script_default="csv",
     entity_type="jobs",
 )
-@click.option("--project", required=True, help="Project path")
 @click.argument("pipeline_id", type=int)
-def list_pipeline_jobs(format_handler, project, pipeline_id):
+def list_pipeline_jobs(format_handler, pipeline_id):
+    project = GitLabClient._repo_path
+    if not project:
+        raise click.ClickException(
+            "--project is required (set via --project, GITLAB_TOOLBOX_PROJECT, or run from a git repository with GitLab remote)"
+        )
     """List jobs for a specific pipeline."""
     jobs = PipelinesAPI.get_pipeline_jobs(project, pipeline_id)
 
