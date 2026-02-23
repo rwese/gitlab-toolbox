@@ -163,6 +163,63 @@ class GitLabClient:
         cls._debug = debug
 
     @classmethod
+    def get_project_from_git(cls, base_url: Optional[str] = None) -> Optional[str]:
+        """Derive GitLab project path from current git repository remote URL.
+
+        Args:
+            base_url: Optional GitLab base URL to match against (e.g., 'https://gitlab.com')
+
+        Returns:
+            Project path (e.g., 'group/project') or None if not in a git repo or no matching remote
+        """
+        import subprocess
+
+        try:
+            result = subprocess.run(
+                ["git", "remote", "get-url", "origin"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            if result.returncode != 0:
+                return None
+
+            remote_url = result.stdout.strip()
+
+            if remote_url.startswith("git@"):
+                if remote_url.startswith("git@"):
+                    remote_url = remote_url.replace(":", "/").replace("git@", "")
+
+            for url_prefix in ["https://", "http://"]:
+                if remote_url.startswith(url_prefix):
+                    remote_url = remote_url[len(url_prefix) :]
+                    break
+
+            remote_url = remote_url.rstrip("/")
+
+            if remote_url.endswith(".git"):
+                remote_url = remote_url[:-4]
+
+            if "/" not in remote_url:
+                return None
+
+            if base_url:
+                base_host = base_url.replace("https://", "").replace("http://", "").rstrip("/")
+                if "/" in remote_url:
+                    host, path = remote_url.split("/", 1)
+                    if host != base_host:
+                        return None
+                    return path
+
+            if "/" in remote_url:
+                return remote_url
+
+            return None
+
+        except (subprocess.TimeoutExpired, FileNotFoundError, Exception):
+            return None
+
+    @classmethod
     def _run_graphql_query(cls, query: str, variables: Optional[Dict] = None) -> Any:
         """Run a GraphQL query using HTTP requests.
 

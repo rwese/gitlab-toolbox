@@ -35,7 +35,12 @@ from .commands import (
     envvar="GITLAB_DEBUG",
     help="Enable debug mode with verbose output. Can also be set via GITLAB_DEBUG env var.",
 )
-def cli(gitlab_url, token, repo_path, debug):
+@click.option(
+    "--project",
+    envvar="GITLAB_TOOLBOX_PROJECT",
+    help="Default project path. Can also be set via GITLAB_TOOLBOX_PROJECT env var.",
+)
+def cli(gitlab_url, token, repo_path, debug, project):
     """GitLab Toolbox - A comprehensive CLI for GitLab operations.
 
     This tool provides commands for managing GitLab groups, projects,
@@ -53,6 +58,14 @@ def cli(gitlab_url, token, repo_path, debug):
         GitLabClient.set_repo_path(repo_path)
     if debug:
         GitLabClient.set_debug(True)
+
+    # Handle project: CLI arg > env var > git remote fallback
+    if not project:
+        base_url = GitLabClient._base_url if GitLabClient._base_url else "https://gitlab.com"
+        project = GitLabClient.get_project_from_git(base_url)
+
+    if project:
+        GitLabClient.set_repo_path(project)
 
 
 # Register command groups with aliases
