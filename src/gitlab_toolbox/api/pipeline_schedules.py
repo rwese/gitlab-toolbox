@@ -478,3 +478,242 @@ class PipelineSchedulesAPI:
             last_pipeline=last_pipeline,
             variables=variables,
         )
+
+    @classmethod
+    def create_schedule(cls, project_path: str, schedule_data: dict) -> Optional[PipelineSchedule]:
+        """Create a new pipeline schedule.
+
+        Args:
+            project_path: The project path
+            schedule_data: Dictionary with schedule fields (description, ref, cron, cron_timezone, active)
+
+        Returns:
+            Created PipelineSchedule object or None if failed
+        """
+        encoded_path = project_path.replace("/", "%2F")
+
+        payload = {}
+        if "description" in schedule_data:
+            payload["description"] = schedule_data["description"]
+        if "ref" in schedule_data:
+            payload["ref"] = schedule_data["ref"]
+        if "cron" in schedule_data:
+            payload["cron"] = schedule_data["cron"]
+        if "cron_timezone" in schedule_data:
+            payload["cron_timezone"] = schedule_data["cron_timezone"]
+        if "active" in schedule_data:
+            payload["active"] = schedule_data["active"]
+
+        variables = schedule_data.get("variables", [])
+        if variables:
+            payload["variables"] = [
+                {
+                    "key": v.get("key"),
+                    "value": v.get("value"),
+                    "variable_type": v.get("variable_type", "env_var"),
+                    "raw": v.get("raw", False),
+                }
+                for v in variables
+                if v.get("key")
+            ]
+
+        with console.status("[bold green]Creating pipeline schedule..."):
+            try:
+                result = GitLabClient._run_api_request(
+                    f"projects/{encoded_path}/pipeline_schedules",
+                    payload,
+                    method="POST",
+                )
+
+                if result and isinstance(result, dict):
+                    console.print(f"[green]✓ Created pipeline schedule #{result.get('id')}[/green]")
+                    return cls._parse_schedule(result)
+                else:
+                    console.print("[red]✗ Failed to create pipeline schedule[/red]")
+                    return None
+
+            except Exception as e:
+                console.print(f"[red]✗ Error creating pipeline schedule: {e}[/red]")
+                return None
+
+    @classmethod
+    def update_schedule(
+        cls, project_path: str, schedule_id: int, schedule_data: dict
+    ) -> Optional[PipelineSchedule]:
+        """Update an existing pipeline schedule.
+
+        Args:
+            project_path: The project path
+            schedule_id: The schedule ID to update
+            schedule_data: Dictionary with schedule fields to update
+
+        Returns:
+            Updated PipelineSchedule object or None if failed
+        """
+        encoded_path = project_path.replace("/", "%2F")
+
+        payload = {}
+        if "description" in schedule_data:
+            payload["description"] = schedule_data["description"]
+        if "ref" in schedule_data:
+            payload["ref"] = schedule_data["ref"]
+        if "cron" in schedule_data:
+            payload["cron"] = schedule_data["cron"]
+        if "cron_timezone" in schedule_data:
+            payload["cron_timezone"] = schedule_data["cron_timezone"]
+        if "active" in schedule_data:
+            payload["active"] = schedule_data["active"]
+
+        with console.status(f"[bold green]Updating pipeline schedule #{schedule_id}..."):
+            try:
+                result = GitLabClient._run_api_request(
+                    f"projects/{encoded_path}/pipeline_schedules/{schedule_id}",
+                    payload,
+                    method="PUT",
+                )
+
+                if result and isinstance(result, dict):
+                    console.print(f"[green]✓ Updated pipeline schedule #{result.get('id')}[/green]")
+                    return cls._parse_schedule(result)
+                else:
+                    console.print(f"[red]✗ Failed to update pipeline schedule #{schedule_id}[/red]")
+                    return None
+
+            except Exception as e:
+                console.print(f"[red]✗ Error updating pipeline schedule #{schedule_id}: {e}[/red]")
+                return None
+
+    @classmethod
+    def create_schedule_variable(
+        cls, project_path: str, schedule_id: int, variable_data: dict
+    ) -> Optional[PipelineScheduleVariable]:
+        """Add a variable to a pipeline schedule.
+
+        Args:
+            project_path: The project path
+            schedule_id: The schedule ID
+            variable_data: Dictionary with key, value, variable_type, raw
+
+        Returns:
+            Created PipelineScheduleVariable or None if failed
+        """
+        encoded_path = project_path.replace("/", "%2F")
+
+        payload = {
+            "key": variable_data.get("key"),
+            "value": variable_data.get("value"),
+            "variable_type": variable_data.get("variable_type", "env_var"),
+            "raw": variable_data.get("raw", False),
+        }
+
+        with console.status(f"[bold green]Adding variable to schedule #{schedule_id}..."):
+            try:
+                result = GitLabClient._run_api_request(
+                    f"projects/{encoded_path}/pipeline_schedules/{schedule_id}/variables",
+                    payload,
+                    method="POST",
+                )
+
+                if result and isinstance(result, dict):
+                    console.print(f"[green]✓ Added variable {result.get('key')}[/green]")
+                    return PipelineScheduleVariable(
+                        key=result.get("key"),
+                        variable_type=result.get("variable_type"),
+                        value=result.get("value"),
+                        raw=result.get("raw", False),
+                    )
+                else:
+                    console.print("[red]✗ Failed to add variable[/red]")
+                    return None
+
+            except Exception as e:
+                console.print(f"[red]✗ Error adding variable: {e}[/red]")
+                return None
+
+    @classmethod
+    def update_schedule_variable(
+        cls, project_path: str, schedule_id: int, variable_key: str, variable_data: dict
+    ) -> Optional[PipelineScheduleVariable]:
+        """Update a variable in a pipeline schedule.
+
+        Args:
+            project_path: The project path
+            schedule_id: The schedule ID
+            variable_key: The variable key to update
+            variable_data: Dictionary with value, variable_type, raw
+
+        Returns:
+            Updated PipelineScheduleVariable or None if failed
+        """
+        encoded_path = project_path.replace("/", "%2F")
+
+        import urllib.parse
+
+        encoded_key = urllib.parse.quote(variable_key, safe="")
+
+        payload = {
+            "value": variable_data.get("value"),
+            "variable_type": variable_data.get("variable_type", "env_var"),
+            "raw": variable_data.get("raw", False),
+        }
+
+        with console.status(
+            f"[bold green]Updating variable {variable_key} in schedule #{schedule_id}..."
+        ):
+            try:
+                result = GitLabClient._run_api_request(
+                    f"projects/{encoded_path}/pipeline_schedules/{schedule_id}/variables/{encoded_key}",
+                    payload,
+                    method="PUT",
+                )
+
+                if result and isinstance(result, dict):
+                    console.print(f"[green]✓ Updated variable {result.get('key')}[/green]")
+                    return PipelineScheduleVariable(
+                        key=result.get("key"),
+                        variable_type=result.get("variable_type"),
+                        value=result.get("value"),
+                        raw=result.get("raw", False),
+                    )
+                else:
+                    console.print(f"[red]✗ Failed to update variable {variable_key}[/red]")
+                    return None
+
+            except Exception as e:
+                console.print(f"[red]✗ Error updating variable {variable_key}: {e}[/red]")
+                return None
+
+    @classmethod
+    def delete_schedule_variable(
+        cls, project_path: str, schedule_id: int, variable_key: str
+    ) -> bool:
+        """Delete a variable from a pipeline schedule.
+
+        Args:
+            project_path: The project path
+            schedule_id: The schedule ID
+            variable_key: The variable key to delete
+
+        Returns:
+            True if successful, False otherwise
+        """
+        encoded_path = project_path.replace("/", "%2F")
+
+        import urllib.parse
+
+        encoded_key = urllib.parse.quote(variable_key, safe="")
+
+        with console.status(
+            f"[bold green]Deleting variable {variable_key} from schedule #{schedule_id}..."
+        ):
+            try:
+                GitLabClient._run_api_request(
+                    f"projects/{encoded_path}/pipeline_schedules/{schedule_id}/variables/{encoded_key}",
+                    method="DELETE",
+                )
+                console.print(f"[green]✓ Deleted variable {variable_key}[/green]")
+                return True
+
+            except Exception as e:
+                console.print(f"[red]✗ Error deleting variable {variable_key}: {e}[/red]")
+                return False
