@@ -41,6 +41,10 @@ class MergeRequestsAPI:
             List of MergeRequest objects
         """
         params = {"state": state}
+        # GitLab's global /merge_requests endpoint defaults to created_by_me.
+        # Set scope=all so unfiltered list shows all visible MRs.
+        if not project_path:
+            params["scope"] = "all"
         if search:
             params["search"] = search
         if author_username:
