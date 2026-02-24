@@ -29,17 +29,14 @@ class CSVFormatter:
                 ["Group", "Username", "Name", "Role", "User Status", "Membership Status"]
             )
 
-            def add_group(group: Group, indent: int = 0):
-                prefix = "  " * indent + ("└─ " if indent > 0 else "")
-                group_path = f"{prefix}{group.full_path}"
+            def add_group(group: Group):
+                group_path = group.full_path
 
                 if group.members:
-                    for i, member in enumerate(group.members):
-                        # Show group name only for first member
-                        group_col = group_path if i == 0 else ""
+                    for member in group.members:
                         writer.writerow(
                             [
-                                group_col,
+                                group_path,
                                 member.username,
                                 member.name,
                                 member.access_level_description,
@@ -47,24 +44,21 @@ class CSVFormatter:
                                 member.membership_state,
                             ]
                         )
-                else:
-                    writer.writerow([group_path, "", "", "", "", ""])
 
                 for subgroup in group.subgroups:
-                    add_group(subgroup, indent + 1)
+                    add_group(subgroup)
 
             for group in groups:
                 add_group(group)
         else:
             writer.writerow(["Group Path", "Group ID"])
 
-            def add_group(group: Group, indent: int = 0):
-                prefix = "  " * indent + ("└─ " if indent > 0 else "")
-                group_path = f"{prefix}{group.full_path}"
+            def add_group(group: Group):
+                group_path = group.full_path
                 writer.writerow([group_path, group.id])
 
                 for subgroup in group.subgroups:
-                    add_group(subgroup, indent + 1)
+                    add_group(subgroup)
 
             for group in groups:
                 add_group(group)
