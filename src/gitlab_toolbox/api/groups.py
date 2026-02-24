@@ -1,7 +1,8 @@
 """Groups API operations."""
 
 import sys
-from typing import List
+from typing import List, Optional
+from urllib.parse import quote
 
 from rich.console import Console
 
@@ -49,6 +50,80 @@ class GroupsAPI:
 
         with console.status("[bold green]Fetching groups..."):
             return GitLabClient.paginate("groups", params, limit=limit)
+
+    @classmethod
+    def get_group(cls, group_ref: str) -> Optional[dict]:
+        """Fetch a single group by ID, full path, or name.
+
+        Args:
+            group_ref: Group identifier (numeric ID, full path, path, or name)
+
+        Returns:
+            Group dictionary if uniquely resolved, otherwise None
+        """
+        ref = (group_ref or "").strip()
+        if not ref:
+            return None
+
+        # Numeric ID lookup
+        if ref.isdigit():
+            group = GitLabClient._run_api_request_optional(f"groups/{ref}")
+            return group if isinstance(group, dict) else None
+
+        # Full path lookup (URL-encoded)
+        encoded_ref = quote(ref, safe="")
+        group = GitLabClient._run_api_request_optional(f"groups/{encoded_ref}")
+        if isinstance(group, dict):
+            return group
+
+        # Fallback: search and resolve exact matches
+        candidates = GitLabClient.paginate(
+            "groups", params={"all_available": "true", "search": ref}, limit=100
+        )
+        if not candidates:
+            return None
+
+        ref_lower = ref.lower()
+
+        path_matches = [
+            g
+            for g in candidates
+            if g.get("full_path", "").lower() == ref_lower or g.get("path", "").lower() == ref_lower
+        ]
+        if len(path_matches) == 1:
+            return path_matches[0]
+        if len(path_matches) > 1:
+            return None
+
+        name_matches = [g for g in candidates if g.get("name", "").lower() == ref_lower]
+        if len(name_matches) == 1:
+            return name_matches[0]
+        if len(name_matches) > 1:
+            return None
+
+        return None
+
+    @classmethod
+    def get_descendant_groups(
+        cls,
+        group_id: int,
+        search: Optional[str] = None,
+        limit: Optional[int] = None,
+    ) -> List[dict]:
+        """Fetch all descendant groups for a parent group.
+
+        Args:
+            group_id: Parent group ID
+            search: Optional subgroup search
+            limit: Maximum number of descendant groups to fetch
+
+        Returns:
+            List of descendant group dictionaries
+        """
+        params = {}
+        if search:
+            params["search"] = search
+        return GitLabClient.paginate(f"groups/{group_id}/descendant_groups", params, limit=limit)
 
     @classmethod
     def get_group_members(cls, group_id: int, active_only: bool = False) -> List[GroupMember]:

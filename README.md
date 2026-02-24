@@ -96,7 +96,7 @@ export GITLAB_DEBUG=1
 
 ```bash
 # List groups (members not fetched by default)
-gitlab-toolbox groups list [--format tree|table] [--include-members] [--summary] [--search QUERY] [--limit N]
+gitlab-toolbox groups list [--format tree|table] [--include-members] [--summary] [--search QUERY] [--parent-group GROUP] [--limit N]
 
 # Show specific group
 gitlab-toolbox groups show GROUP_PATH [--format tree|table] [--include-members]
@@ -171,6 +171,7 @@ gitlab-toolbox pipeline-schedules trigger --project PROJECT_PATH SCHEDULE_ID
 | --------------------------------- | --------------------------------------------- |
 | `--limit N`                       | Limit results (saves time on large instances) |
 | `--search QUERY`                  | Search by name/title                          |
+| `--parent-group GROUP`            | Traverse groups from parent group (groups)    |
 | `--pipeline-status STATUS`        | Filter MRs by pipeline status                 |
 | `--include-members`               | Fetch group members (groups only)             |
 | `--format table\|tree\|json\|csv` | Output format                                 |

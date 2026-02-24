@@ -34,9 +34,15 @@ def groups_cli():
 )
 @click.option("--summary", is_flag=True, help="Show summary statistics")
 @click.option("--search", help="Search groups by name")
+@click.option(
+    "--parent-group",
+    help="Traverse from this parent group (ID, full path, path, or name)",
+)
 @click.option("--limit", type=int, help="Maximum number of groups to fetch")
-def list_groups(format_handler, include_members, active_members_only, summary, search, limit):
-    """List all GitLab groups."""
+def list_groups(
+    format_handler, include_members, active_members_only, summary, search, parent_group, limit
+):
+    """List GitLab groups."""
     console.print(
         Panel(
             "[bold cyan]GitLab Groups Explorer[/bold cyan]",
@@ -44,8 +50,22 @@ def list_groups(format_handler, include_members, active_members_only, summary, s
         )
     )
 
-    # Fetch all groups
-    groups_data = GroupsAPI.get_all_groups(search=search, limit=limit)
+    # Fetch all groups or subtree rooted at parent_group
+    if parent_group:
+        parent_group_data = GroupsAPI.get_group(parent_group)
+        if not parent_group_data:
+            console.print(
+                f"[red]Parent group '{parent_group}' not found or not uniquely resolvable.[/red]"
+            )
+            return
+
+        descendants_limit = (limit - 1) if (limit and limit > 0) else None
+        descendants = GroupsAPI.get_descendant_groups(
+            parent_group_data["id"], search=search, limit=descendants_limit
+        )
+        groups_data = [parent_group_data] + descendants
+    else:
+        groups_data = GroupsAPI.get_all_groups(search=search, limit=limit)
 
     if not groups_data:
         console.print("[yellow]No groups found or error occurred.[/yellow]")
