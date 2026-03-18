@@ -57,6 +57,23 @@ link = f"[link={entity.web_url}]🔗[/link]" if entity.web_url else ""
 4. Create command in `commands/`
 5. Register in `cli.py`
 
+### 4. Conventional Commits
+
+- Follow the repository-local commit format from `specs/git-workflow.md`: `<type>(<scope>): <description>`
+- Use Conventional Commits types that are already accepted by the repo: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`
+- Keep scope short and specific to the affected area, such as `api`, `cli`, `projects`, or `readme`
+- Write the description as a concise imperative summary
+- Split unrelated changes into separate commits instead of combining multiple concerns into one message
+- When a change is breaking, use Conventional Commits breaking-change syntax and include context in the commit body or footer
+
+Examples:
+
+```text
+feat(projects): add search functionality
+fix(api): handle timeout on slow connections
+docs(readme): update installation instructions
+```
+
 ## Task Validation
 
 Before completing any task:
