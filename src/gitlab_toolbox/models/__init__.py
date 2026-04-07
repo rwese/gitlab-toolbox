@@ -1,5 +1,6 @@
 """Data models for GitLab entities."""
 
+from .auth import AuthStatus
 from .group import Group, GroupMember
 from .project import Project
 from .merge_request import MergeRequest
@@ -12,6 +13,7 @@ from .pipeline_schedule import (
 )
 
 __all__ = [
+    "AuthStatus",
     "Group",
     "GroupMember",
     "Project",
