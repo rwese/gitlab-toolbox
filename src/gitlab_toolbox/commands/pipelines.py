@@ -33,15 +33,21 @@ def pipelines_cli():
     ),
     help="Filter by pipeline status",
 )
+@click.option(
+    "--sort",
+    type=click.Choice(["id", "created_at", "updated_at"]),
+    default="id",
+    help="Sort pipelines by field (default: id)",
+)
 @click.option("--limit", type=int, help="Maximum number of pipelines to fetch")
-def list_pipelines(format_handler, status, limit):
+def list_pipelines(format_handler, status, sort, limit):
     project = GitLabClient._repo_path
     if not project:
         raise click.ClickException(
             "--project is required (set via --project, GITLAB_TOOLBOX_PROJECT, or run from a git repository with GitLab remote)"
         )
     """List pipelines for a project."""
-    pipelines = PipelinesAPI.get_pipelines(project, status=status, limit=limit)
+    pipelines = PipelinesAPI.get_pipelines(project, status=status, limit=limit, sort_by=sort)
 
     if not pipelines:
         console.print("[yellow]No pipelines found.[/yellow]")

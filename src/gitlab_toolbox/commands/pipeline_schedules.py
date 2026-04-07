@@ -31,13 +31,19 @@ def pipeline_schedules_cli():
     type=click.Choice(["active", "inactive"], case_sensitive=False),
     help="Filter by schedule state",
 )
+@click.option(
+    "--sort",
+    type=click.Choice(["description", "id", "next_run"]),
+    default="description",
+    help="Sort schedules by field (default: description)",
+)
 @click.option("--limit", type=int, help="Maximum number of schedules to fetch")
 @click.option(
     "--include-last-pipeline",
     is_flag=True,
     help="Fetch last pipeline information for each schedule (slower)",
 )
-def list_pipeline_schedules(format_handler, state, limit, include_last_pipeline):
+def list_pipeline_schedules(format_handler, state, sort, limit, include_last_pipeline):
     project = GitLabClient._repo_path
     if not project:
         raise click.ClickException(
@@ -52,8 +58,13 @@ def list_pipeline_schedules(format_handler, state, limit, include_last_pipeline)
         console.print("[yellow]No pipeline schedules found.[/yellow]")
         return
 
-    # Sort schedules by description (case-insensitive)
-    schedules.sort(key=lambda s: s.description.lower() if s.description else "")
+    # Sort schedules by specified field
+    if sort == "id":
+        schedules.sort(key=lambda s: s.id)
+    elif sort == "next_run":
+        schedules.sort(key=lambda s: s.next_run_at or "")
+    else:  # description (default)
+        schedules.sort(key=lambda s: s.description.lower() if s.description else "")
 
     format_handler(schedules)
     console.print(f"\n[dim]Total schedules: {len(schedules)}[/dim]")

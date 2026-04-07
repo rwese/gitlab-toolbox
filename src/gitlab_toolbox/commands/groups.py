@@ -38,9 +38,15 @@ def groups_cli():
     "--parent-group",
     help="Traverse from this parent group (ID, full path, path, or name)",
 )
+@click.option(
+    "--sort",
+    type=click.Choice(["name", "path", "id"]),
+    default="name",
+    help="Sort groups by field (default: name)",
+)
 @click.option("--limit", type=int, help="Maximum number of groups to fetch")
 def list_groups(
-    format_handler, include_members, active_members_only, summary, search, parent_group, limit
+    format_handler, include_members, active_members_only, summary, search, parent_group, sort, limit
 ):
     """List GitLab groups."""
     console.print(
@@ -76,6 +82,9 @@ def list_groups(
         groups_data, fetch_members=include_members, active_members_only=active_members_only
     )
 
+    # Sort groups
+    groups = _sort_groups(groups, sort)
+
     # Display results using format handler
     format_handler(groups, show_members=include_members)
 
@@ -83,6 +92,31 @@ def list_groups(
     if summary:
         console.print()
         DisplayFormatter.display_groups_summary(groups)
+
+
+def _sort_groups(groups, sort_by: str):
+    """Sort groups recursively by specified field.
+
+    Args:
+        groups: List of Group objects
+        sort_by: Sort field (name, path, id)
+
+    Returns:
+        Sorted list of groups
+    """
+    if sort_by == "path":
+        groups.sort(key=lambda g: g.full_path.lower())
+    elif sort_by == "id":
+        groups.sort(key=lambda g: g.id)
+    else:  # name (default)
+        groups.sort(key=lambda g: g.name.lower())
+
+    # Recursively sort subgroups
+    for group in groups:
+        if group.subgroups:
+            group.subgroups = _sort_groups(group.subgroups, sort_by)
+
+    return groups
 
 
 @groups_cli.command(name="show")

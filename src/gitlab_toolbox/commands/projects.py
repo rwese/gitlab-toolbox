@@ -25,11 +25,24 @@ def projects_cli():
     entity_type="projects",
 )
 @click.option("--group", help="Filter projects by group path")
+@click.option("--include-subgroups", is_flag=True, help="Include projects from subgroups")
 @click.option("--search", help="Search projects by name")
+@click.option(
+    "--sort",
+    type=click.Choice(["path", "stars", "forks", "last_updated"]),
+    default="path",
+    help="Sort projects by field (default: path)",
+)
 @click.option("--limit", type=int, help="Maximum number of projects to fetch")
-def list_projects(format_handler, group, search, limit):
+def list_projects(format_handler, group, include_subgroups, search, sort, limit):
     """List GitLab projects."""
-    projects = ProjectsAPI.get_projects(group_path=group, search=search, limit=limit)
+    projects = ProjectsAPI.get_projects(
+        group_path=group,
+        search=search,
+        limit=limit,
+        include_subgroups=include_subgroups,
+        sort_by=sort,
+    )
 
     if not projects:
         console.print("[yellow]No projects found.[/yellow]")
@@ -37,7 +50,10 @@ def list_projects(format_handler, group, search, limit):
 
     format_handler(projects)
 
-    console.print(f"\n[dim]Total projects: {len(projects)}[/dim]")
+    if include_subgroups:
+        console.print(f"\n[dim]Total projects (including subgroups): {len(projects)}[/dim]")
+    else:
+        console.print(f"\n[dim]Total projects: {len(projects)}[/dim]")
 
 
 @projects_cli.command(name="show")
