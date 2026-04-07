@@ -20,6 +20,8 @@ class ProjectsAPI:
         group_path: Optional[str] = None,
         search: Optional[str] = None,
         limit: Optional[int] = None,
+        include_subgroups: bool = False,
+        sort_by: str = "path",
     ) -> List[Project]:
         """Fetch projects from GitLab.
 
@@ -27,6 +29,8 @@ class ProjectsAPI:
             group_path: Optional group path to filter projects
             search: Optional search query
             limit: Maximum number of projects to fetch
+            include_subgroups: Include projects from subgroups
+            sort_by: Sort field (path, stars, forks, last_updated)
 
         Returns:
             List of Project objects
@@ -45,13 +49,30 @@ class ProjectsAPI:
                     return []
 
                 group_id = matching_group["id"]
+
+                if include_subgroups:
+                    params["include_subgroups"] = "true"
+
                 projects_data = GitLabClient.paginate(
                     f"groups/{group_id}/projects", params, limit=limit
                 )
             else:
                 projects_data = GitLabClient.paginate("projects", params, limit=limit)
 
-        return [cls._parse_project(p) for p in projects_data]
+        projects = [cls._parse_project(p) for p in projects_data]
+
+        # Sort projects
+        if sort_by == "path":
+            projects.sort(key=lambda p: p.path_with_namespace.lower())
+        elif sort_by == "stars":
+            projects.sort(key=lambda p: p.star_count, reverse=True)
+        elif sort_by == "forks":
+            projects.sort(key=lambda p: p.forks_count, reverse=True)
+        elif sort_by == "last_updated":
+            # Projects with web_url have last_activity_at, use it for sorting
+            projects.sort(key=lambda p: getattr(p, "last_activity_at", "") or "", reverse=True)
+
+        return projects
 
     @classmethod
     def get_project(cls, project_path: str) -> Optional[Project]:
@@ -113,4 +134,5 @@ class ProjectsAPI:
             namespace_path=data.get("namespace", {}).get("full_path", ""),
             star_count=data.get("star_count", 0),
             forks_count=data.get("forks_count", 0),
+            last_activity_at=data.get("last_activity_at"),
         )

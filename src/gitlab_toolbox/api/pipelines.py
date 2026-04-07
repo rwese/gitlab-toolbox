@@ -22,6 +22,7 @@ class PipelinesAPI:
         source: Optional[str] = None,
         created_after: Optional[str] = None,
         limit: Optional[int] = None,
+        sort_by: str = "id",
     ) -> List[Pipeline]:
         """Fetch pipelines for a project.
 
@@ -31,6 +32,7 @@ class PipelinesAPI:
             source: Optional pipeline source filter (e.g., 'merge_request_event', 'push')
             created_after: Optional ISO 8601 date string to filter pipelines created after this date
             limit: Maximum number of pipelines to fetch
+            sort_by: Sort field (id, created_at, updated_at)
 
         Returns:
             List of Pipeline objects
@@ -49,7 +51,30 @@ class PipelinesAPI:
                 f"projects/{encoded_path}/pipelines", params, limit=limit
             )
 
-        return [cls._parse_pipeline(p) for p in pipelines_data]
+        pipelines = [cls._parse_pipeline(p) for p in pipelines_data]
+
+        # Sort pipelines
+        pipelines = cls._sort_pipelines(pipelines, sort_by)
+
+        return pipelines
+
+    @staticmethod
+    def _sort_pipelines(pipelines: List[Pipeline], sort_by: str) -> List[Pipeline]:
+        """Sort pipelines by specified field.
+
+        Args:
+            pipelines: List of pipelines
+            sort_by: Sort field (id, created_at, updated_at)
+
+        Returns:
+            Sorted list of pipelines
+        """
+        if sort_by == "created_at":
+            return sorted(pipelines, key=lambda p: p.created_at or "", reverse=True)
+        elif sort_by == "updated_at":
+            return sorted(pipelines, key=lambda p: p.updated_at or "", reverse=True)
+        else:  # id (default)
+            return sorted(pipelines, key=lambda p: p.id, reverse=True)
 
     @classmethod
     def get_pipeline(cls, project_path: str, pipeline_id: int) -> Optional[Pipeline]:

@@ -25,6 +25,7 @@ class MergeRequestsAPI:
         exclude_drafts: bool = False,
         pipeline_status: Optional[str] = None,
         limit: Optional[int] = None,
+        sort_by: str = "created_at",
     ) -> List[MergeRequest]:
         """Fetch merge requests.
 
@@ -36,6 +37,7 @@ class MergeRequestsAPI:
             exclude_drafts: Exclude draft/WIP merge requests
             pipeline_status: Filter by pipeline status (success, failed, running, pending, etc.)
             limit: Maximum number of MRs to fetch
+            sort_by: Sort field (created_at, updated_at, merged_at)
 
         Returns:
             List of MergeRequest objects
@@ -86,7 +88,28 @@ class MergeRequestsAPI:
             if limit:
                 mrs = mrs[:limit]
 
+        # Sort merge requests
+        mrs = cls._sort_merge_requests(mrs, sort_by)
+
         return mrs
+
+    @staticmethod
+    def _sort_merge_requests(mrs: List[MergeRequest], sort_by: str) -> List[MergeRequest]:
+        """Sort merge requests by specified field.
+
+        Args:
+            mrs: List of merge requests
+            sort_by: Sort field (created_at, updated_at, merged_at)
+
+        Returns:
+            Sorted list of merge requests
+        """
+        if sort_by == "updated_at":
+            return sorted(mrs, key=lambda m: m.updated_at or "", reverse=True)
+        elif sort_by == "merged_at":
+            return sorted(mrs, key=lambda m: m.merged_at or "", reverse=True)
+        else:  # created_at (default)
+            return sorted(mrs, key=lambda m: m.created_at or "", reverse=True)
 
     @classmethod
     def get_merge_request(cls, project_path: str, mr_iid: int) -> Optional[MergeRequest]:

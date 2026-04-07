@@ -40,6 +40,12 @@ def mergerequests_cli():
     "--pipeline-status",
     help="Filter by pipeline status (success, failed, running, pending, canceled, skipped)",
 )
+@click.option(
+    "--sort",
+    type=click.Choice(["created_at", "updated_at", "merged_at"]),
+    default="created_at",
+    help="Sort merge requests by field (default: created_at)",
+)
 @click.option("--limit", type=int, help="Maximum number of merge requests to fetch")
 @click.option(
     "--trigger-pipeline",
@@ -53,6 +59,7 @@ def list_merge_requests(
     author,
     no_drafts,
     pipeline_status,
+    sort,
     limit,
     trigger_pipeline,
 ):
@@ -66,6 +73,7 @@ def list_merge_requests(
         exclude_drafts=no_drafts,
         pipeline_status=pipeline_status,
         limit=limit,
+        sort_by=sort,
     )
 
     if not mrs:
