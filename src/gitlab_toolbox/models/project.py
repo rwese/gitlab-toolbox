@@ -19,3 +19,4 @@ class Project:
     namespace_path: str
     star_count: int
     forks_count: int
+    last_activity_at: Optional[str] = None
