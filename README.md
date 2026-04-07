@@ -70,6 +70,30 @@ gitlab-toolbox --token YOUR_TOKEN groups list
 - `CI_JOB_TOKEN` (for GitLab CI/CD)
 - `GL_TOKEN`
 
+### Authentication Commands
+
+GitLab Toolbox provides dedicated commands for managing authentication:
+
+```bash
+# Check authentication status
+gitlab-toolbox auth status [--url URL]
+
+# Interactive setup wizard
+gitlab-toolbox auth setup [--url URL] [--token TOKEN]
+
+# Login with a token
+gitlab-toolbox auth login --url https://gitlab.example.com --token YOUR_TOKEN
+
+# Interactive login using glab CLI
+gitlab-toolbox auth login --interactive
+
+# Logout from an instance
+gitlab-toolbox auth logout [--url URL] [--all]
+
+# Manage token environment variables
+gitlab-toolbox auth token [--set TOKEN] [--clear]
+```
+
 ### GitLab Instance
 
 ```bash
@@ -156,6 +180,7 @@ gitlab-toolbox pipeline-schedules trigger --project PROJECT_PATH SCHEDULE_ID
 
 ## Features
 
+- **Authentication Management**: Verify setup, login/logout, and interactive setup wizard
 - **Groups & Members**: Explore groups, subgroups, and members with hierarchical visualization
 - **Projects**: List and search projects across groups
 - **Merge Requests**: View, search, and filter with advanced pipeline status filtering
