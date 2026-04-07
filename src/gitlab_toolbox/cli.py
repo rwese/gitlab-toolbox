@@ -4,6 +4,7 @@ import click
 
 from .api.client import GitLabClient
 from .commands import (
+    auth_cli,
     groups_cli,
     projects_cli,
     mergerequests_cli,
@@ -12,7 +13,7 @@ from .commands import (
 )
 
 
-@click.group()
+@click.group(context_settings={"ignore_unknown_options": True}, invoke_without_command=True)
 @click.version_option(version="1.0.0")
 @click.option(
     "--gitlab-url",
@@ -40,12 +41,18 @@ from .commands import (
     envvar="GITLAB_TOOLBOX_PROJECT",
     help="Default project path. Can also be set via GITLAB_TOOLBOX_PROJECT env var.",
 )
-def cli(gitlab_url, token, repo_path, debug, project):
+@click.pass_context
+def cli(ctx, gitlab_url, token, repo_path, debug, project):
     """GitLab Toolbox - A comprehensive CLI for GitLab operations.
 
     This tool provides commands for managing GitLab groups, projects,
     merge requests, CI/CD pipelines, and pipeline schedules using direct HTTP API calls.
     """
+    # Show help if no command provided
+    if ctx.invoked_subcommand is None:
+        click.echo(ctx.get_help())
+        ctx.exit(0)
+
     # Configure GitLab client
     if gitlab_url:
         GitLabClient.set_base_url(gitlab_url)
@@ -68,21 +75,13 @@ def cli(gitlab_url, token, repo_path, debug, project):
         GitLabClient.set_repo_path(project)
 
 
-# Register command groups with aliases
+# Register command groups
+cli.add_command(auth_cli)
 cli.add_command(groups_cli)
-cli.add_command(groups_cli, name="g")  # Alias for groups
-
 cli.add_command(projects_cli)
-cli.add_command(projects_cli, name="proj")  # Alias for projects
-
 cli.add_command(mergerequests_cli)
-cli.add_command(mergerequests_cli, name="mr")  # Alias for mergerequests
-
 cli.add_command(pipelines_cli)
-cli.add_command(pipelines_cli, name="p")  # Alias for pipelines
-
 cli.add_command(pipeline_schedules_cli)
-cli.add_command(pipeline_schedules_cli, name="ps")  # Alias for pipeline-schedules
 
 
 if __name__ == "__main__":
