@@ -27,6 +27,7 @@ class PipelineSchedulesAPI:
         scope: Optional[str] = None,
         limit: Optional[int] = None,
         include_last_pipeline: bool = False,
+        include_variables: bool = False,
     ) -> List[PipelineSchedule]:
         """Fetch pipeline schedules for a project.
 
@@ -34,6 +35,8 @@ class PipelineSchedulesAPI:
             project_path: The project path
             scope: Optional scope filter ('active' or 'inactive')
             limit: Maximum number of schedules to fetch
+            include_last_pipeline: Fetch last pipeline information for each schedule
+            include_variables: Fetch variables for each schedule (slower, N+1 requests)
 
         Returns:
             List of PipelineSchedule objects
@@ -45,7 +48,7 @@ class PipelineSchedulesAPI:
 
         if include_last_pipeline:
             # Use REST API with pipeline fetching for reliable last pipeline data
-            return cls._get_schedules_with_rest_fallback(project_path, scope, limit)
+            schedules = cls._get_schedules_with_rest_fallback(project_path, scope, limit)
         else:
             # Use REST API for fast listing without pipeline details
             with console.status("[bold green]Fetching pipeline schedules..."):
@@ -61,7 +64,41 @@ class PipelineSchedulesAPI:
                         f"[dim]Schedule {i + 1}: has last_pipeline = {'last_pipeline' in s}, keys = {list(s.keys())}[/dim]"
                     )
 
-            return [cls._parse_schedule(s) for s in schedules_data]
+            schedules = [cls._parse_schedule(s) for s in schedules_data]
+
+        # Fetch variables for each schedule if requested
+        if include_variables:
+            with console.status("[bold green]Fetching schedule variables..."):
+                schedules = cls._fetch_schedules_variables(project_path, schedules)
+
+        return schedules
+
+    @classmethod
+    def _fetch_schedules_variables(
+        cls, project_path: str, schedules: List[PipelineSchedule]
+    ) -> List[PipelineSchedule]:
+        """Fetch variables for each schedule individually.
+
+        The list endpoint doesn't include variables, so we need to fetch each
+        schedule individually to get the variables.
+
+        Args:
+            project_path: The project path
+            schedules: List of PipelineSchedule objects
+
+        Returns:
+            List of PipelineSchedule objects with variables populated
+        """
+        updated_schedules = []
+        for schedule in schedules:
+            # Fetch the full schedule with variables
+            full_schedule = cls.get_schedule(project_path, schedule.id)
+            if full_schedule:
+                updated_schedules.append(full_schedule)
+            else:
+                # Keep the original schedule if fetch failed
+                updated_schedules.append(schedule)
+        return updated_schedules
 
     @classmethod
     def _get_schedules_with_graphql(
@@ -485,7 +522,7 @@ class PipelineSchedulesAPI:
 
         Args:
             project_path: The project path
-            schedule_data: Dictionary with schedule fields (description, ref, cron, cron_timezone, active)
+            schedule_data: Dictionary with schedule fields (description, ref, cron, cron_timezone, active, variables)
 
         Returns:
             Created PipelineSchedule object or None if failed
@@ -504,18 +541,8 @@ class PipelineSchedulesAPI:
         if "active" in schedule_data:
             payload["active"] = schedule_data["active"]
 
+        # Variables must be added separately after schedule creation
         variables = schedule_data.get("variables", [])
-        if variables:
-            payload["variables"] = [
-                {
-                    "key": v.get("key"),
-                    "value": v.get("value"),
-                    "variable_type": v.get("variable_type", "env_var"),
-                    "raw": v.get("raw", False),
-                }
-                for v in variables
-                if v.get("key")
-            ]
 
         with console.status("[bold green]Creating pipeline schedule..."):
             try:
@@ -526,8 +553,29 @@ class PipelineSchedulesAPI:
                 )
 
                 if result and isinstance(result, dict):
-                    console.print(f"[green]✓ Created pipeline schedule #{result.get('id')}[/green]")
-                    return cls._parse_schedule(result)
+                    schedule_id = result.get("id")
+                    console.print(f"[green]✓ Created pipeline schedule #{schedule_id}[/green]")
+
+                    # Add variables separately if present
+                    if variables:
+                        with console.status(
+                            f"[bold green]Adding variables to schedule #{schedule_id}..."
+                        ):
+                            for var in variables:
+                                if var.get("key"):
+                                    cls.create_schedule_variable(
+                                        project_path,
+                                        schedule_id,
+                                        {
+                                            "key": var.get("key"),
+                                            "value": var.get("value"),
+                                            "variable_type": var.get("variable_type", "env_var"),
+                                            "raw": var.get("raw", False),
+                                        },
+                                    )
+
+                    # Return the schedule with variables by fetching it again
+                    return cls.get_schedule(project_path, schedule_id)
                 else:
                     console.print("[red]✗ Failed to create pipeline schedule[/red]")
                     return None

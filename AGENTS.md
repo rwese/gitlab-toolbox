@@ -4,6 +4,17 @@
 
 A Python CLI tool for GitLab operations using direct HTTP API calls via `glab`.
 
+## Design Philosophy
+
+This tool is designed for **scripting and shell exploration**. All commands should:
+
+- Work well when piped/scripted (output to stdout/stderr appropriately)
+- Support `--dry-run` for safe testing
+- Support `--output` for file-based workflows
+- Use JSON as the primary machine-readable format
+- Use Rich formatting for human-readable table output in interactive shells
+- Avoid interactive prompts (except optional `--yes` confirmations when necessary)
+
 ## Project Specifications
 
 Reference these documents for detailed guidance:
@@ -43,13 +54,33 @@ src/gitlab_toolbox/
 - URL-encode project paths: `group/project` → `group%2Fproject`
 - Groups use `parent_id` for hierarchy (two-pass algorithm)
 
-### 2. Rich Output Pattern
+### 2. Output Design
+
+- **stdout**: Machine-readable output (JSON, CSV, raw data)
+- **stderr**: Status messages, progress, user feedback
+- Rich tables for interactive shell display (auto-detected via TTY)
+- JSON output when piped/scripted
 
 ```python
 link = f"[link={entity.web_url}]🔗[/link]" if entity.web_url else ""
 ```
 
-### 3. Adding New Commands
+### 3. Command Design
+
+All commands should support:
+
+```bash
+# Script-friendly: output to file
+gitlab-toolbox pipeline-schedules export -o schedules.json
+
+# Dry-run for safe testing
+gitlab-toolbox pipeline-schedules import -i schedules.json --dry-run
+
+# JSON output for piping
+gitlab-toolbox pipeline-schedules list --output json | jq '.[] | .id'
+```
+
+### 4. Adding New Commands
 
 1. Create model in `models/`
 2. Create API wrapper in `api/`
@@ -57,7 +88,7 @@ link = f"[link={entity.web_url}]🔗[/link]" if entity.web_url else ""
 4. Create command in `commands/`
 5. Register in `cli.py`
 
-### 4. Conventional Commits
+### 5. Conventional Commits
 
 - Follow the repository-local commit format from `specs/git-workflow.md`: `<type>(<scope>): <description>`
 - Use Conventional Commits types that are already accepted by the repo: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`
