@@ -30,11 +30,9 @@ class MarkdownFormatter:
                 group_path = f"{prefix}{group.full_path}"
 
                 if group.members:
-                    for i, member in enumerate(group.members):
-                        # Show group name only for first member
-                        group_col = group_path if i == 0 else ""
+                    for member in group.members:
                         lines.append(
-                            f"| {group_col} | {member.username} | {member.name} | "
+                            f"| {group_path} | {member.username} | {member.name} | "
                             f"{member.access_level_description} | {member.state} | "
                             f"{member.membership_state} |"
                         )
