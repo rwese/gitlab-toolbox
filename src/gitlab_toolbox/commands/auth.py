@@ -342,7 +342,8 @@ def setup(url: str, token: str, scope: str):
     console.print("\n[bold]Step 2:[/bold] Personal Access Token")
 
     if not token:
-        console.print("""
+        console.print(
+            """
 [dim]Create a personal access token at:[/dim]
   {url}/-/profile/personal_access_tokens
 
@@ -351,7 +352,10 @@ def setup(url: str, token: str, scope: str):
   • read_api - Read API access
   • read_repository - Read repository access
   • write_repository - Write repository access
-""".format(url=url))
+""".format(
+                url=url
+            )
+        )
 
         token = click.prompt(
             "Enter your personal access token",
@@ -373,10 +377,12 @@ def setup(url: str, token: str, scope: str):
         auth_info = AuthAPI.check_auth_with_url(url, token)
         _display_auth_status(auth_info)
 
-        console.print("""
+        console.print(
+            """
 [dim]You can now use gitlab-toolbox commands.[/dim]
 [dim]Run 'gitlab-toolbox auth status' to verify your authentication.[/dim]
-""")
+"""
+        )
     else:
         console.print("\n[bold red]✗ Authentication failed.[/bold red]")
         console.print("[dim]Please check your token and try again.[/dim]")

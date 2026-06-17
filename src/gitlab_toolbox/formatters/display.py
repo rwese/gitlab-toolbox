@@ -9,7 +9,17 @@ from rich.table import Table
 from rich.tree import Tree
 from rich import box
 
-from ..models import Group, Project, MergeRequest, Pipeline, Job, PipelineSchedule
+from ..models import (
+    Group,
+    Project,
+    MergeRequest,
+    Pipeline,
+    Job,
+    PipelineSchedule,
+    UserCounts,
+    UserMembership,
+    UserProfile,
+)
 
 # Console for status/info messages (goes to stderr)
 console_stderr = Console(file=sys.stderr)
@@ -45,9 +55,8 @@ class DisplayFormatter:
             table.add_column("User Status", style="blue")
             table.add_column("Membership", style="magenta")
 
-            def add_group_to_table(group: Group, indent: int = 0):
-                prefix = "  " * indent + ("└─ " if indent > 0 else "")
-                group_path = f"{prefix}{group.full_path}"
+            def add_group_to_table(group: Group):
+                group_path = group.full_path
 
                 if group.members:
                     for i, member in enumerate(group.members):
@@ -65,7 +74,7 @@ class DisplayFormatter:
                     table.add_row(group_path, "[dim]No members[/dim]", "", "", "", "")
 
                 for subgroup in group.subgroups:
-                    add_group_to_table(subgroup, indent + 1)
+                    add_group_to_table(subgroup)
 
             for group in groups:
                 add_group_to_table(group)
@@ -81,13 +90,12 @@ class DisplayFormatter:
             table.add_column("Group Path", style="cyan", no_wrap=False)
             table.add_column("Group ID", style="dim")
 
-            def add_group_to_table(group: Group, indent: int = 0):
-                prefix = "  " * indent + ("└─ " if indent > 0 else "")
-                group_path = f"{prefix}{group.full_path}"
+            def add_group_to_table(group: Group):
+                group_path = group.full_path
                 table.add_row(group_path, str(group.id))
 
                 for subgroup in group.subgroups:
-                    add_group_to_table(subgroup, indent + 1)
+                    add_group_to_table(subgroup)
 
             for group in groups:
                 add_group_to_table(group)
@@ -200,6 +208,88 @@ class DisplayFormatter:
 
         panel = Panel(details, title="Project Details", border_style="blue")
         console_stdout.print(panel)
+
+    @staticmethod
+    def display_users_table(users: List[UserProfile]):
+        """Display users as a table."""
+        table = Table(
+            title="GitLab Users",
+            box=box.ROUNDED,
+            show_header=True,
+            header_style="bold magenta",
+        )
+        table.add_column("ID", justify="right", style="cyan")
+        table.add_column("Username", style="yellow")
+        table.add_column("Name", style="white")
+        table.add_column("State", style="green")
+        table.add_column("Email", style="dim")
+        table.add_column("URL", style="dim", no_wrap=True)
+
+        for user in users:
+            data = user.to_dict()
+            link = f"[link={user.web_url}]🔗[/link]" if user.web_url else ""
+            table.add_row(
+                str(user.id),
+                user.username,
+                user.name,
+                user.state or "",
+                data.get("email") or data.get("public_email") or "",
+                link,
+            )
+
+        console_stdout.print(table)
+
+    @staticmethod
+    def display_user_details(user: UserProfile, show_sensitive: bool = False):
+        """Display detailed information about a user."""
+        data = user.to_dict(show_sensitive=show_sensitive)
+        user_link = f"[link={user.web_url}]{user.web_url}[/link]" if user.web_url else "N/A"
+        details = f"""[bold cyan]{user.name}[/bold cyan]
+ [dim]@{user.username} · ID {user.id}[/dim]
+
+ [bold]State:[/bold] {user.state or "N/A"}
+ [bold]Email:[/bold] {data.get("email") or data.get("public_email") or "N/A"}
+ [bold]Job Title:[/bold] {user.job_title or "N/A"}
+ [bold]Organization:[/bold] {user.organization or "N/A"}
+ [bold]Location:[/bold] {user.location or "N/A"}
+ [bold]Last Activity:[/bold] {user.last_activity_on or "N/A"}
+ [bold]URL:[/bold] {user_link}"""
+        console_stdout.print(Panel(details, title="User Details", border_style="blue"))
+
+    @staticmethod
+    def display_user_memberships_table(memberships: List[UserMembership]):
+        """Display user memberships as a table."""
+        table = Table(
+            title="GitLab User Memberships",
+            box=box.ROUNDED,
+            show_header=True,
+            header_style="bold magenta",
+        )
+        table.add_column("Type", style="cyan")
+        table.add_column("Name", style="white")
+        table.add_column("Role", style="green")
+        table.add_column("Expires", style="yellow")
+        table.add_column("URL", style="dim", no_wrap=True)
+        for membership in memberships:
+            link = f"[link={membership.web_url}]🔗[/link]" if membership.web_url else ""
+            table.add_row(
+                membership.source_type or "",
+                membership.source_full_name or "",
+                membership.access_level_description or str(membership.access_level or ""),
+                membership.expires_at or "",
+                link,
+            )
+        console_stdout.print(table)
+
+    @staticmethod
+    def display_user_counts_details(counts: UserCounts):
+        """Display user counts as details."""
+        lines = []
+        for key, value in counts.raw.items():
+            lines.append(f"[bold]{key.replace('_', ' ').title()}:[/bold] {value}")
+        console_stdout.print(
+            Panel("\n".join(lines) if lines else "No counts found.", title="User Counts")
+        )
 
     # Merge Requests display methods
     @staticmethod
