@@ -6,6 +6,7 @@ from .projects import projects_cli
 from .merge_requests import mergerequests_cli
 from .pipelines import pipelines_cli
 from .pipeline_schedules import pipeline_schedules_cli
+from .users import whoami_cli
 
 __all__ = [
     "auth_cli",
@@ -14,4 +15,5 @@ __all__ = [
     "mergerequests_cli",
     "pipelines_cli",
     "pipeline_schedules_cli",
+    "whoami_cli",
 ]

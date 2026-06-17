@@ -10,6 +10,7 @@ from .commands import (
     mergerequests_cli,
     pipelines_cli,
     pipeline_schedules_cli,
+    whoami_cli,
 )
 
 
@@ -82,6 +83,7 @@ cli.add_command(projects_cli)
 cli.add_command(mergerequests_cli)
 cli.add_command(pipelines_cli)
 cli.add_command(pipeline_schedules_cli)
+cli.add_command(whoami_cli)
 
 
 if __name__ == "__main__":

@@ -25,9 +25,8 @@ class MarkdownFormatter:
                 "|-------|----------|------|------|-------------|------------|",
             ]
 
-            def add_group(group: Group, indent: int = 0):
-                prefix = "  " * indent + ("└─ " if indent > 0 else "")
-                group_path = f"{prefix}{group.full_path}"
+            def add_group(group: Group):
+                group_path = group.full_path
 
                 if group.members:
                     for member in group.members:
@@ -40,7 +39,7 @@ class MarkdownFormatter:
                     lines.append(f"| {group_path} | *No members* | | | | |")
 
                 for subgroup in group.subgroups:
-                    add_group(subgroup, indent + 1)
+                    add_group(subgroup)
 
             for group in groups:
                 add_group(group)
@@ -50,13 +49,12 @@ class MarkdownFormatter:
                 "|------------|----------|",
             ]
 
-            def add_group(group: Group, indent: int = 0):
-                prefix = "  " * indent + ("└─ " if indent > 0 else "")
-                group_path = f"{prefix}{group.full_path}"
+            def add_group(group: Group):
+                group_path = group.full_path
                 lines.append(f"| {group_path} | {group.id} |")
 
                 for subgroup in group.subgroups:
-                    add_group(subgroup, indent + 1)
+                    add_group(subgroup)
 
             for group in groups:
                 add_group(group)

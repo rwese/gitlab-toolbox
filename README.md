@@ -136,6 +136,21 @@ gitlab-toolbox projects list [--group GROUP_PATH] [--search QUERY] [--limit N]
 gitlab-toolbox projects show PROJECT_PATH
 ```
 
+### Whoami
+
+```bash
+# Show authenticated user
+gitlab-toolbox whoami
+
+# List authenticated user's memberships
+gitlab-toolbox whoami memberships [--type group|project|all] [--min-access-level LEVEL] [--limit N]
+
+# Show authenticated user's current work and association stats
+gitlab-toolbox whoami stats
+```
+
+User emails are redacted by default in human-readable and machine-readable output.
+
 ### Merge Requests
 
 ```bash
@@ -183,6 +198,7 @@ gitlab-toolbox pipeline-schedules trigger --project PROJECT_PATH SCHEDULE_ID
 - **Authentication Management**: Verify setup, login/logout, and interactive setup wizard
 - **Groups & Members**: Explore groups, subgroups, and members with hierarchical visualization
 - **Projects**: List and search projects across groups
+- **Whoami**: Show authenticated user, memberships, stats, and redacted current-user metadata
 - **Merge Requests**: View, search, and filter with advanced pipeline status filtering
 - **CI/CD Pipelines**: Monitor pipeline status and view jobs
 - **Pipeline Schedules**: List, view, and trigger schedules with full details

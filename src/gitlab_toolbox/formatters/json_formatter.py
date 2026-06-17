@@ -4,7 +4,17 @@ import json
 from dataclasses import asdict
 from typing import List
 
-from ..models import Group, Project, MergeRequest, Pipeline, Job, PipelineSchedule
+from ..models import (
+    Group,
+    Project,
+    MergeRequest,
+    Pipeline,
+    Job,
+    PipelineSchedule,
+    UserCounts,
+    UserMembership,
+    UserProfile,
+)
 
 
 class JSONFormatter:
@@ -93,3 +103,26 @@ class JSONFormatter:
             JSON string
         """
         return json.dumps([asdict(s) for s in schedules], indent=2)
+
+    @staticmethod
+    def format_user(user: UserProfile, show_sensitive: bool = False) -> str:
+        """Format a user as JSON."""
+        return json.dumps(user.to_dict(show_sensitive=show_sensitive), indent=2)
+
+    @staticmethod
+    def format_users(users: List[UserProfile], show_sensitive: bool = False) -> str:
+        """Format users as JSON."""
+        return json.dumps(
+            [user.to_dict(show_sensitive=show_sensitive) for user in users],
+            indent=2,
+        )
+
+    @staticmethod
+    def format_user_memberships(memberships: List[UserMembership]) -> str:
+        """Format user memberships as JSON."""
+        return json.dumps([asdict(membership) for membership in memberships], indent=2)
+
+    @staticmethod
+    def format_user_counts(counts: UserCounts) -> str:
+        """Format user counts as JSON."""
+        return json.dumps(asdict(counts), indent=2)

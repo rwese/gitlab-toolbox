@@ -11,6 +11,7 @@ from .pipeline_schedule import (
     PipelineScheduleOwner,
     PipelineScheduleLastPipeline,
 )
+from .user import UserCounts, UserMembership, UserProfile
 
 __all__ = [
     "AuthStatus",
@@ -24,4 +25,7 @@ __all__ = [
     "PipelineScheduleVariable",
     "PipelineScheduleOwner",
     "PipelineScheduleLastPipeline",
+    "UserProfile",
+    "UserMembership",
+    "UserCounts",
 ]

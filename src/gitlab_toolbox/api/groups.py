@@ -4,6 +4,7 @@ import sys
 from typing import List, Optional
 from urllib.parse import quote
 
+import requests
 from rich.console import Console
 
 from ..models import Group, GroupMember
@@ -136,7 +137,15 @@ class GroupsAPI:
         Returns:
             List of GroupMember objects
         """
-        members_data = GitLabClient.paginate(f"groups/{group_id}/members")
+        try:
+            members_data = GitLabClient.paginate(f"groups/{group_id}/members")
+        except requests.HTTPError as error:
+            if error.response is not None and error.response.status_code == 403:
+                console.print(
+                    f"[yellow]Skipping members for group {group_id}: 403 Forbidden[/yellow]"
+                )
+                return []
+            raise
 
         members = []
         for member in members_data:

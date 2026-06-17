@@ -35,3 +35,28 @@ def test_group_members_markdown_repeats_full_group_for_every_member():
 
     assert "| platform/toolbox | ada | Ada Lovelace | Owner | active | active |" in output
     assert "| platform/toolbox | grace | Grace Hopper | Developer | active | active |" in output
+
+
+def test_group_markdown_does_not_prefix_subgroups_with_tree_glyphs():
+    group = Group(
+        id=1,
+        name="platform",
+        full_path="platform",
+        parent_id=None,
+        members=[],
+        subgroups=[
+            Group(
+                id=2,
+                name="toolbox",
+                full_path="platform/toolbox",
+                parent_id=1,
+                members=[],
+                subgroups=[],
+            )
+        ],
+    )
+
+    output = MarkdownFormatter.format_groups([group], show_members=False)
+
+    assert "| platform/toolbox | 2 |" in output
+    assert "└─" not in output

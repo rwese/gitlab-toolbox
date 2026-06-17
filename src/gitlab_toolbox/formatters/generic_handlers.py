@@ -41,12 +41,16 @@ class FormatHandlerRegistry:
         ("pipelines", "table"): "display_pipelines_table",
         ("pipeline_schedules", "table"): "display_pipeline_schedules_table",
         ("jobs", "table"): "display_pipeline_jobs",
+        ("users", "table"): "display_users_table",
+        ("user_memberships", "table"): "display_user_memberships_table",
         # Tree methods
         ("groups", "tree"): "display_groups_as_tree",
         # Details methods
         ("project", "details"): "display_project_details",
         ("merge_request", "details"): "display_merge_request_details",
         ("pipeline_schedule", "details"): "display_pipeline_schedule_details",
+        ("user", "details"): "display_user_details",
+        ("user_counts", "details"): "display_user_counts_details",
     }
 
     # Mapping from singular entity types to plural for JSON/CSV formatters
@@ -54,6 +58,7 @@ class FormatHandlerRegistry:
         "project": "projects",
         "merge_request": "merge_requests",
         "pipeline_schedule": "pipeline_schedules",
+        "user": "users",
     }
 
     @classmethod

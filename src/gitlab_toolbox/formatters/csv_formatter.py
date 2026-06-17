@@ -4,7 +4,17 @@ import csv
 import io
 from typing import List
 
-from ..models import Group, Project, MergeRequest, Pipeline, Job, PipelineSchedule
+from ..models import (
+    Group,
+    Project,
+    MergeRequest,
+    Pipeline,
+    Job,
+    PipelineSchedule,
+    UserCounts,
+    UserMembership,
+    UserProfile,
+)
 
 
 class CSVFormatter:
@@ -217,4 +227,54 @@ class CSVFormatter:
                 ]
             )
 
+        return output.getvalue()
+
+    @staticmethod
+    def format_users(users: List[UserProfile]) -> str:
+        """Format users as CSV."""
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["ID", "Username", "Name", "State", "Email", "URL"])
+        for user in users:
+            data = user.to_dict()
+            writer.writerow(
+                [
+                    user.id,
+                    user.username,
+                    user.name,
+                    user.state or "",
+                    data.get("email") or data.get("public_email") or "",
+                    user.web_url or "",
+                ]
+            )
+        return output.getvalue()
+
+    @staticmethod
+    def format_user_memberships(memberships: List[UserMembership]) -> str:
+        """Format user memberships as CSV."""
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["Type", "ID", "Name", "Access Level", "Role", "Expires", "URL"])
+        for membership in memberships:
+            writer.writerow(
+                [
+                    membership.source_type,
+                    membership.source_id,
+                    membership.source_full_name,
+                    membership.access_level or "",
+                    membership.access_level_description or "",
+                    membership.expires_at or "",
+                    membership.web_url or "",
+                ]
+            )
+        return output.getvalue()
+
+    @staticmethod
+    def format_user_counts(counts: UserCounts) -> str:
+        """Format user counts as CSV."""
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["Name", "Count"])
+        for key, value in counts.raw.items():
+            writer.writerow([key, value])
         return output.getvalue()
