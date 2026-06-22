@@ -12,6 +12,12 @@ Two endpoints are exposed:
 
 Both endpoints share the same response shape; see
 :func:`CILintAPI._parse_result` for the parsing logic.
+
+Note: the ``:id`` path segment of both endpoints must be the project's
+**numeric** ID. Path-based lookups (``group/project``) are not accepted
+by the lint endpoints, so callers can pass either a numeric ID or a
+project path and :func:`CILintAPI._resolve_project_id` will handle the
+translation transparently.
 """
 
 import sys
@@ -28,6 +34,35 @@ console = Console(file=sys.stderr)
 class CILintAPI:
     """API wrapper for the GitLab CI Lint API."""
 
+    @staticmethod
+    def _resolve_project_id(project: str) -> Optional[int]:
+        """Resolve a project path or numeric ID to a numeric ID.
+
+        The CI Lint endpoints only accept the numeric project ID in
+        their ``:id`` path segment, so any caller-provided project path
+        (e.g. ``group/project``) must first be translated to its
+        numeric ID via ``GET /projects/:id_or_path``.
+
+        Args:
+            project: Either a numeric project ID (as a string) or a
+                project path (e.g. ``group/project``).
+
+        Returns:
+            The numeric project ID, or ``None`` if the project could
+            not be resolved.
+        """
+        # If the caller already provided a numeric ID, skip the lookup.
+        if project.isdigit():
+            return int(project)
+
+        encoded_path = project.replace("/", "%2F")
+        with console.status(f"[bold green]Resolving project {project}..."):
+            data = GitLabClient._run_api_request_optional(f"projects/{encoded_path}")
+
+        if not data or not isinstance(data, dict):
+            return None
+        return data.get("id")
+
     @classmethod
     def lint_content(
         cls,
@@ -41,7 +76,9 @@ class CILintAPI:
         """Validate a CI configuration provided as content via the POST endpoint.
 
         Args:
-            project_path: The project path (e.g., ``group/project``).
+            project_path: The project path (e.g., ``group/project``)
+                or numeric ID. Will be resolved to the numeric ID
+                before calling the API.
             content: The CI/CD configuration YAML content. Maps to the
                 ``content`` API field.
             ref: Optional branch/tag context. Maps to the ``ref`` API
@@ -55,9 +92,13 @@ class CILintAPI:
 
         Returns:
             A :class:`CILintResult` populated from the API response, or
-            ``None`` if the API call failed.
+            ``None`` if the project could not be resolved or the API
+            call failed.
         """
-        encoded_path = project_path.replace("/", "%2F")
+        project_id = cls._resolve_project_id(project_path)
+        if project_id is None:
+            console.print(f"[red]Project not found:[/red] {project_path}")
+            return None
 
         body: Dict[str, Any] = {"content": content}
         body["dry_run"] = bool(dry_run)
@@ -67,7 +108,7 @@ class CILintAPI:
 
         with console.status("[bold green]Linting CI configuration..."):
             data = GitLabClient._run_api_request(
-                f"projects/{encoded_path}/ci/lint",
+                f"projects/{project_id}/ci/lint",
                 body,
                 method="POST",
             )
@@ -87,7 +128,9 @@ class CILintAPI:
         """Validate the project's ``.gitlab-ci.yml`` via the GET endpoint.
 
         Args:
-            project_path: The project path (e.g., ``group/project``).
+            project_path: The project path (e.g., ``group/project``)
+                or numeric ID. Will be resolved to the numeric ID
+                before calling the API.
             content_ref: SHA, branch, or tag to read the configuration
                 from. Maps to ``content_ref``. Defaults to the head of
                 the project's default branch.
@@ -101,9 +144,13 @@ class CILintAPI:
 
         Returns:
             A :class:`CILintResult` populated from the API response, or
-            ``None`` if the API call failed.
+            ``None`` if the project could not be resolved or the API
+            call failed.
         """
-        encoded_path = project_path.replace("/", "%2F")
+        project_id = cls._resolve_project_id(project_path)
+        if project_id is None:
+            console.print(f"[red]Project not found:[/red] {project_path}")
+            return None
 
         params: Dict[str, Any] = {}
         params["dry_run"] = "true" if dry_run else "false"
@@ -115,7 +162,7 @@ class CILintAPI:
 
         with console.status("[bold green]Linting project CI configuration..."):
             data = GitLabClient._run_api_request(
-                f"projects/{encoded_path}/ci/lint",
+                f"projects/{project_id}/ci/lint",
                 params,
                 method="GET",
             )

@@ -183,7 +183,9 @@ def validate_ci(
         endpoint_label = "GET /api/v4/projects/{}/ci/lint".format(project.replace("/", "%2F"))
 
     # ------------------------------------------------------------------
-    # Call the API
+    # Call the API. The wrapper resolves the project path to a numeric
+    # ID internally because the CI Lint endpoints require the numeric
+    # ID in their :id path segment.
     # ------------------------------------------------------------------
     try:
         if content is not None:
@@ -207,7 +209,8 @@ def validate_ci(
         sys.exit(1)
 
     if result is None:
-        console.print("[red]CI lint request returned an unexpected payload.[/red]")
+        # The wrapper already printed "Project not found" for resolution
+        # failures; for any other unexpected payload, exit non-zero.
         sys.exit(1)
 
     # ------------------------------------------------------------------
