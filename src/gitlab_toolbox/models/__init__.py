@@ -11,6 +11,7 @@ from .pipeline_schedule import (
     PipelineScheduleOwner,
     PipelineScheduleLastPipeline,
 )
+from .ci_lint import CILintResult, LintJob
 from .user import UserCounts, UserMembership, UserProfile
 
 __all__ = [
@@ -25,6 +26,8 @@ __all__ = [
     "PipelineScheduleVariable",
     "PipelineScheduleOwner",
     "PipelineScheduleLastPipeline",
+    "CILintResult",
+    "LintJob",
     "UserProfile",
     "UserMembership",
     "UserCounts",
