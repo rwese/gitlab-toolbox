@@ -5,6 +5,7 @@ import click
 from .api.client import GitLabClient
 from .commands import (
     auth_cli,
+    ci_cli,
     groups_cli,
     projects_cli,
     mergerequests_cli,
@@ -78,6 +79,7 @@ def cli(ctx, gitlab_url, token, repo_path, debug, project):
 
 # Register command groups
 cli.add_command(auth_cli)
+cli.add_command(ci_cli)
 cli.add_command(groups_cli)
 cli.add_command(projects_cli)
 cli.add_command(mergerequests_cli)
