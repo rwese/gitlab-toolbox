@@ -10,6 +10,7 @@ from rich.tree import Tree
 from rich import box
 
 from ..models import (
+    CILintResult,
     Group,
     Project,
     MergeRequest,
@@ -561,4 +562,82 @@ class DisplayFormatter:
                 details += f"\n  {var.key} = {var.value} ({var.variable_type})"
 
         panel = Panel(details, title="Pipeline Schedule Details", border_style="blue")
+        console_stdout.print(panel)
+
+    # CI lint display
+    @staticmethod
+    def display_ci_lint_result(
+        result: CILintResult,
+        *,
+        project: str,
+        endpoint: str,
+        source: str,
+        ref: str = "",
+        dry_run: bool = False,
+        include_jobs: bool = False,
+    ):
+        """Display a CI lint result as a human-readable panel.
+
+        Args:
+            result: The :class:`CILintResult` returned by the API.
+            project: Project path that was linted.
+            endpoint: Endpoint used (``POST`` or ``GET``).
+            source: Human description of where the YAML came from
+                (e.g. a file path or ``<project .gitlab-ci.yml>``).
+            ref: Git ref used as lint context (if any).
+            dry_run: Whether ``--dry-run`` was enabled.
+            include_jobs: Whether ``--include-jobs`` was enabled.
+        """
+        if result.valid and not result.has_warnings:
+            status_line = "[bold green]\u2713 CI lint: valid[/bold green]"
+            border = "green"
+        elif result.valid:
+            status_line = "[bold yellow]\u26a0 CI lint: valid (with warnings)[/bold yellow]"
+            border = "yellow"
+        else:
+            status_line = "[bold red]\u2717 CI lint: invalid[/bold red]"
+            border = "red"
+
+        details = f"{status_line}\n\n"
+        details += f"[bold]Project:[/bold]  {project}\n"
+        details += f"[bold]Endpoint:[/bold] {endpoint}\n"
+        details += f"[bold]Source:[/bold]   {source}\n"
+        if ref:
+            details += f"[bold]Ref:[/bold]      {ref}\n"
+        if dry_run:
+            details += "[bold]Mode:[/bold]     dry-run (pipeline-creation simulation)\n"
+        if include_jobs:
+            details += f"[bold]Jobs:[/bold]     {len(result.jobs)} resolved\n"
+
+        details += f"\n[bold]Errors:[/bold]   {len(result.errors)}\n"
+        if result.errors:
+            for err in result.errors:
+                details += f"  [red]- {err}[/red]\n"
+
+        details += f"[bold]Warnings:[/bold] {len(result.warnings)}\n"
+        if result.warnings:
+            for warn in result.warnings:
+                details += f"  [yellow]- {warn}[/yellow]\n"
+
+        details += f"[bold]Includes:[/bold] {len(result.includes)}\n"
+        if result.includes:
+            for inc in result.includes[:10]:
+                loc = inc.get("location") or inc.get("type", "?")
+                details += f"  [dim]- {loc}[/dim]\n"
+            if len(result.includes) > 10:
+                details += f"  [dim]... and {len(result.includes) - 10} more[/dim]\n"
+
+        if result.merged_yaml:
+            preview_lines = result.merged_yaml.splitlines()[:5]
+            details += "\n[bold]Merged YAML preview:[/bold] [dim](first 5 lines)[/dim]\n"
+            for line in preview_lines:
+                details += f"  {line}\n"
+
+        if result.jobs:
+            details += "\n[bold]Resolved jobs:[/bold]\n"
+            for job in result.jobs:
+                stage = job.stage or "?"
+                details += f"  [cyan]{job.name}[/cyan] [dim](stage: {stage})[/dim]\n"
+
+        panel = Panel(details, title="CI Lint Result", border_style=border)
         console_stdout.print(panel)
