@@ -8,6 +8,7 @@ from rich.console import Console
 from ..models import (
     Pipeline,
     PipelineSchedule,
+    PipelineScheduleInput,
     PipelineScheduleVariable,
     PipelineScheduleOwner,
     PipelineScheduleLastPipeline,
@@ -142,6 +143,12 @@ class PipelineSchedulesAPI:
                     value
                     variableType
                     raw
+                  }
+                }
+                inputs {
+                  nodes {
+                    name
+                    value
                   }
                 }
               }
@@ -304,6 +311,18 @@ class PipelineSchedulesAPI:
             for var in variables_data
         ]
 
+        # Parse inputs (newer GitLab feature; field may be missing on older
+        # instances or when the caller lacks the maintainer/owner role).
+        inputs_data = data.get("inputs", {}).get("nodes", []) or []
+        inputs = [
+            PipelineScheduleInput(
+                name=inp.get("name"),
+                value=inp.get("value"),
+            )
+            for inp in inputs_data
+            if inp.get("name")
+        ]
+
         return PipelineSchedule(
             id=schedule_id,
             description=data.get("description"),
@@ -317,6 +336,7 @@ class PipelineSchedulesAPI:
             owner=owner,
             last_pipeline=last_pipeline,
             variables=variables,
+            inputs=inputs,
         )
 
         # Parse last pipeline from GraphQL
@@ -342,6 +362,17 @@ class PipelineSchedulesAPI:
             for var in variables_data
         ]
 
+        # Parse inputs (see note above)
+        inputs_data = data.get("inputs", {}).get("nodes", []) or []
+        inputs = [
+            PipelineScheduleInput(
+                name=inp.get("name"),
+                value=inp.get("value"),
+            )
+            for inp in inputs_data
+            if inp.get("name")
+        ]
+
         return PipelineSchedule(
             id=schedule_id,
             description=data.get("description"),
@@ -355,6 +386,7 @@ class PipelineSchedulesAPI:
             owner=owner,
             last_pipeline=last_pipeline,
             variables=variables,
+            inputs=inputs,
         )
 
     @classmethod
@@ -512,6 +544,18 @@ class PipelineSchedulesAPI:
             for var in variables_data
         ]
 
+        # Parse inputs (newer GitLab feature, may be missing on older
+        # instances or when the caller lacks the maintainer/owner role).
+        inputs_data = data.get("inputs", []) or []
+        inputs = [
+            PipelineScheduleInput(
+                name=inp.get("name"),
+                value=inp.get("value"),
+            )
+            for inp in inputs_data
+            if inp.get("name")
+        ]
+
         return PipelineSchedule(
             id=data.get("id"),
             description=data.get("description"),
@@ -525,6 +569,7 @@ class PipelineSchedulesAPI:
             owner=owner,
             last_pipeline=last_pipeline,
             variables=variables,
+            inputs=inputs,
         )
 
     @classmethod
@@ -533,7 +578,13 @@ class PipelineSchedulesAPI:
 
         Args:
             project_path: The project path
-            schedule_data: Dictionary with schedule fields (description, ref, cron, cron_timezone, active, variables)
+            schedule_data: Dictionary with schedule fields (description, ref, cron,
+                cron_timezone, active, variables, inputs). ``inputs`` is a list of
+                ``{"name": ..., "value": ...}`` dicts and is forwarded to the
+                REST API as ``inputs: [{"name": ..., "value": ...}, ...]`` (the
+                array form required by GitLab 17.11+/18.1+; the hash form is
+                rejected with "inputs is invalid"). Any ``_destroy`` entries
+                (update-only) are skipped.
 
         Returns:
             Created PipelineSchedule object or None if failed
@@ -551,6 +602,19 @@ class PipelineSchedulesAPI:
             payload["cron_timezone"] = schedule_data["cron_timezone"]
         if "active" in schedule_data:
             payload["active"] = schedule_data["active"]
+
+        # The GitLab REST API requires the array form for ``inputs`` (the hash
+        # form is rejected). Skip ``_destroy`` entries on create; those are only
+        # meaningful on update.
+        inputs = schedule_data.get("inputs", [])
+        if inputs:
+            inputs_payload = [
+                {"name": str(inp.get("name")), "value": inp.get("value")}
+                for inp in inputs
+                if inp.get("name") and not inp.get("_destroy")
+            ]
+            if inputs_payload:
+                payload["inputs"] = inputs_payload
 
         # Variables must be added separately after schedule creation
         variables = schedule_data.get("variables", [])
@@ -585,7 +649,7 @@ class PipelineSchedulesAPI:
                                         },
                                     )
 
-                    # Return the schedule with variables by fetching it again
+                    # Return the schedule with variables and inputs by fetching it again
                     return cls.get_schedule(project_path, schedule_id)
                 else:
                     console.print("[red]✗ Failed to create pipeline schedule[/red]")
@@ -604,7 +668,12 @@ class PipelineSchedulesAPI:
         Args:
             project_path: The project path
             schedule_id: The schedule ID to update
-            schedule_data: Dictionary with schedule fields to update
+            schedule_data: Dictionary with schedule fields to update. May include
+                ``inputs`` (a list of ``{"name": ..., "value": ...}`` dicts) and
+                ``inputs_to_destroy`` (a list of input names to remove). To remove
+                an input, also include ``{"name": "...", "_destroy": true}`` in
+                ``inputs``; the GitLab REST API uses that pattern to mark a
+                specific input for removal.
 
         Returns:
             Updated PipelineSchedule object or None if failed
@@ -622,6 +691,30 @@ class PipelineSchedulesAPI:
             payload["cron_timezone"] = schedule_data["cron_timezone"]
         if "active" in schedule_data:
             payload["active"] = schedule_data["active"]
+
+        # Pipeline inputs are passed as an array of {name, value} (the hash
+        # form is rejected). To remove an input, send
+        # ``{"name": "<input>", "_destroy": true}`` per the GitLab REST API.
+        inputs = schedule_data.get("inputs")
+        inputs_to_destroy = schedule_data.get("inputs_to_destroy", [])
+
+        inputs_array: List[dict] = []
+        if inputs:
+            for inp in inputs:
+                name = inp.get("name")
+                if not name:
+                    continue
+                if inp.get("_destroy"):
+                    inputs_array.append({"name": name, "_destroy": True})
+                else:
+                    inputs_array.append({"name": name, "value": inp.get("value")})
+
+        for name in inputs_to_destroy or []:
+            if name:
+                inputs_array.append({"name": name, "_destroy": True})
+
+        if inputs_array:
+            payload["inputs"] = inputs_array
 
         with console.status(f"[bold green]Updating pipeline schedule #{schedule_id}..."):
             try:

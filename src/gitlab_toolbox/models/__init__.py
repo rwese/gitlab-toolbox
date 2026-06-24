@@ -7,6 +7,7 @@ from .merge_request import MergeRequest
 from .pipeline import Pipeline, Job
 from .pipeline_schedule import (
     PipelineSchedule,
+    PipelineScheduleInput,
     PipelineScheduleVariable,
     PipelineScheduleOwner,
     PipelineScheduleLastPipeline,
@@ -23,6 +24,7 @@ __all__ = [
     "Pipeline",
     "Job",
     "PipelineSchedule",
+    "PipelineScheduleInput",
     "PipelineScheduleVariable",
     "PipelineScheduleOwner",
     "PipelineScheduleLastPipeline",

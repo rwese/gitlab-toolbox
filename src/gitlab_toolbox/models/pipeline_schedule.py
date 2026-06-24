@@ -1,7 +1,7 @@
 """Pipeline schedule data models."""
 
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import Any, List, Optional
 
 
 @dataclass
@@ -12,6 +12,26 @@ class PipelineScheduleVariable:
     variable_type: str
     value: str
     raw: bool
+
+
+@dataclass
+class PipelineScheduleInput:
+    """Represents a pipeline schedule input.
+
+    Pipeline inputs are a newer GitLab feature (17.11/18.1) that lets a
+    schedule pass typed values to the pipeline specification's
+    ``spec.inputs`` section. Unlike ``PipelineScheduleVariable``, the value
+    is not constrained to a string and can be a number, boolean, array, or
+    string depending on the spec.
+
+    The optional ``_destroy`` flag mirrors the GitLab REST API convention for
+    removing an input from an existing schedule via ``PUT`` (sending
+    ``{"name": "<input>", "_destroy": true}``).
+    """
+
+    name: str
+    value: Any = None
+    _destroy: bool = False
 
 
 @dataclass
@@ -52,3 +72,4 @@ class PipelineSchedule:
     owner: PipelineScheduleOwner
     last_pipeline: Optional[PipelineScheduleLastPipeline]
     variables: List[PipelineScheduleVariable]
+    inputs: List[PipelineScheduleInput] = None  # type: ignore[assignment]

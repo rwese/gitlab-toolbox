@@ -561,6 +561,11 @@ class DisplayFormatter:
             for var in schedule.variables:
                 details += f"\n  {var.key} = {var.value} ({var.variable_type})"
 
+        if schedule.inputs:
+            details += "\n\n[bold]Inputs:[/bold]"
+            for inp in schedule.inputs:
+                details += f"\n  {inp.name} = {inp.value!r}"
+
         panel = Panel(details, title="Pipeline Schedule Details", border_style="blue")
         console_stdout.print(panel)
 

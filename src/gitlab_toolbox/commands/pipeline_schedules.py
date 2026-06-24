@@ -298,7 +298,16 @@ def update_pipeline_schedule(schedule_id, project, description, ref, cron, cron_
     default=True,
     help="Include schedule variables in export (default: true)",
 )
-def export_pipeline_schedules(project, name_filter, state, output, include_variables):
+@click.option(
+    "--include-inputs/--no-include-inputs",
+    default=True,
+    help="Include schedule inputs in export (default: true). Inputs are a "
+    "newer GitLab feature (17.11+/18.1+) distinct from variables; disable "
+    "to drop them from the export payload.",
+)
+def export_pipeline_schedules(
+    project, name_filter, state, output, include_variables, include_inputs
+):
     """Export pipeline schedules to JSON.
 
     Example usage:
@@ -330,7 +339,11 @@ def export_pipeline_schedules(project, name_filter, state, output, include_varia
         console.print("[yellow]No pipeline schedules found matching the criteria.[/yellow]")
         return
 
-    export_data = _schedules_to_export_format(schedules, include_variables=include_variables)
+    export_data = _schedules_to_export_format(
+        schedules,
+        include_variables=include_variables,
+        include_inputs=include_inputs,
+    )
     json_output = json.dumps(export_data, indent=2)
 
     if output:
@@ -434,16 +447,26 @@ def import_pipeline_schedules(project, input, dry_run, skip_existing):
     skipped_count = 0
 
     for schedule_data in valid_schedules:
+        inputs = schedule_data.get("inputs") or []
+        variables = schedule_data.get("variables") or []
+        extras = []
+        if variables:
+            extras.append(f"{len(variables)} variable(s)")
+        if inputs:
+            extras.append(f"{len(inputs)} input(s)")
+        extras_str = f" [{', '.join(extras)}]" if extras else ""
+
         if dry_run:
             console.print(
                 f"[cyan]→ Would create: {schedule_data.get('description')} "
-                f"(ref={schedule_data.get('ref')}, cron={schedule_data.get('cron')})[/cyan]"
+                f"(ref={schedule_data.get('ref')}, cron={schedule_data.get('cron')})"
+                f"{extras_str}[/cyan]"
             )
             created_count += 1
         else:
             schedule = PipelineSchedulesAPI.create_schedule(project, schedule_data)
             if schedule:
-                console.print(f"[green]✓ Created: {schedule.description}[/green]")
+                console.print(f"[green]✓ Created: {schedule.description}{extras_str}[/green]")
                 created_count += 1
             else:
                 console.print(f"[red]✗ Failed to create: {schedule_data.get('description')}[/red]")
@@ -459,8 +482,14 @@ def import_pipeline_schedules(project, input, dry_run, skip_existing):
         )
 
 
-def _schedules_to_export_format(schedules, include_variables=True):
-    """Convert PipelineSchedule objects to exportable format."""
+def _schedules_to_export_format(schedules, include_variables=True, include_inputs=True):
+    """Convert PipelineSchedule objects to exportable format.
+
+    Inputs are exported as a list of ``{"name": ..., "value": ...}`` dicts to
+    match the GitLab REST API response shape and to preserve order. The
+    import side normalises this back into the array form expected by the
+    create/update endpoints.
+    """
     export_data = []
 
     for schedule in schedules:
@@ -481,6 +510,15 @@ def _schedules_to_export_format(schedules, include_variables=True):
                     "raw": var.raw,
                 }
                 for var in schedule.variables
+            ]
+
+        if include_inputs and schedule.inputs:
+            schedule_dict["inputs"] = [
+                {
+                    "name": inp.name,
+                    "value": inp.value,
+                }
+                for inp in schedule.inputs
             ]
 
         export_data.append(schedule_dict)
