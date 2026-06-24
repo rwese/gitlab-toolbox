@@ -339,7 +339,8 @@ def export_pipeline_schedules(project, name_filter, state, output, include_varia
         console.print(f"[green]✓ Exported {len(schedules)} schedule(s) to {output}[/green]")
     else:
         print(json_output)
-        console.print(f"[dim]Exported {len(schedules)} schedule(s)[/dim]", file=sys.stderr)
+        # `console` is bound to stderr at module scope, so no `file=` kwarg here.
+        console.print(f"[dim]Exported {len(schedules)} schedule(s)[/dim]")
 
 
 @pipeline_schedules_cli.command(name="import")
