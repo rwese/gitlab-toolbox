@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "gitlab-toolbox"
-version = "1.0.0"
+version = "1.2.0"
 description = "A CLI toolbox for GitLab operations using direct HTTP API calls"
 readme = "README.md"
 requires-python = ">=3.8"
