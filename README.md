@@ -180,6 +180,55 @@ gitlab-toolbox pipelines show --project PROJECT_PATH PIPELINE_ID
 gitlab-toolbox pipelines jobs --project PROJECT_PATH PIPELINE_ID
 ```
 
+### CI Lint
+
+Lint a CI/CD configuration against the project context using the
+[GitLab CI Lint API](https://docs.gitlab.com/api/lint/).
+
+> `ci validate` always runs a real pipeline-creation simulation
+> (`dry_run=true`). This is required for `--ref` to be honored on the
+> POST endpoint — otherwise the GitLab API would resolve `local:`
+> `include:` files against the project's default branch and produce
+> misleading errors on feature branches. There is no opt-out for a
+> static-only check.
+
+```bash
+# Lint a local .gitlab-ci.yml file (POST endpoint, real simulation)
+gitlab-toolbox ci validate --project PROJECT_PATH -f .gitlab-ci.yml
+
+# Lint YAML piped through stdin
+cat .gitlab-ci.yml | gitlab-toolbox ci validate --project PROJECT_PATH -f -
+
+# Lint the project's own .gitlab-ci.yml on its default branch (GET endpoint)
+gitlab-toolbox ci validate --project PROJECT_PATH
+
+# Validate a feature branch's .gitlab-ci.yml + its local includes
+# against the same branch and list resolved jobs
+gitlab-toolbox ci validate --project PROJECT_PATH -f .gitlab-ci.yml \
+    --ref feature/login --include-jobs
+
+# Override the simulation ref independently of the YAML ref
+gitlab-toolbox ci validate --project PROJECT_PATH --ref feature/login \
+    --dry-run-ref main
+
+# JSON output for piping into other tools
+gitlab-toolbox ci validate --project PROJECT_PATH -f .gitlab-ci.yml --format json | jq '.errors'
+
+# Use --fail-on-warning to exit non-zero when warnings are present
+gitlab-toolbox ci validate --project PROJECT_PATH -f .gitlab-ci.yml --fail-on-warning
+```
+
+| Option                       | Description                                                                            |
+| ---------------------------- | -------------------------------------------------------------------------------------- |
+| `-f PATH` / `-f -`           | Path to a CI YAML file, or `-` to read YAML from stdin                                 |
+| `--ref REF`                  | Git ref (branch, tag, or SHA) for the lint operation                                  |
+| `--dry-run-ref REF`          | Ref used as pipeline-creation simulation context (GET only)                            |
+| `--include-jobs`             | Include the resolved list of jobs in the API response                                 |
+| `--format table\|json`       | Output format (default: `table`)                                                      |
+| `--fail-on-warning`          | Exit with a non-zero status when the lint result contains warnings                    |
+
+Exit codes: `0` valid (no warnings), `1` invalid or API error, `2` valid with warnings and `--fail-on-warning`.
+
 ### Pipeline Schedules
 
 ```bash
@@ -201,6 +250,7 @@ gitlab-toolbox pipeline-schedules trigger --project PROJECT_PATH SCHEDULE_ID
 - **Whoami**: Show authenticated user, memberships, stats, and redacted current-user metadata
 - **Merge Requests**: View, search, and filter with advanced pipeline status filtering
 - **CI/CD Pipelines**: Monitor pipeline status and view jobs
+- **CI Lint**: Validate `.gitlab-ci.yml` against the GitLab CI Lint API (file, stdin, or project)
 - **Pipeline Schedules**: List, view, and trigger schedules with full details
 - **Pipeline Status Filtering**: Filter MRs by latest pipeline status (like GitLab's UI)
 - **Performance**: Optimized API calls with date filtering and source type restrictions
