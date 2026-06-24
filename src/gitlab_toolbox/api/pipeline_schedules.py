@@ -240,7 +240,7 @@ class PipelineSchedulesAPI:
     @staticmethod
     def _parse_schedule_from_graphql(data: dict) -> PipelineSchedule:
         """Parse schedule data from GraphQL response."""
-        from ..client import GitLabClient
+        from .client import GitLabClient
 
         if GitLabClient._debug:
             console.print(f"[dim]Parsing GraphQL schedule data: {data}[/dim]")
@@ -251,6 +251,17 @@ class PipelineSchedulesAPI:
             console.print(f"[dim]Pipelines data: {len(pipelines_data)} pipelines found[/dim]")
             if pipelines_data:
                 console.print(f"[dim]First pipeline: {pipelines_data[0]}[/dim]")
+
+        # GraphQL exposes IDs as global IDs (e.g. "gid://gitlab/Ci::PipelineSchedule/140").
+        # Extract the numeric suffix so the rest of the toolchain (which compares
+        # integer IDs) keeps working.
+        raw_id = str(data.get("id", "0"))
+        if "/" in raw_id:
+            raw_id = raw_id.rsplit("/", 1)[-1]
+        try:
+            schedule_id = int(raw_id)
+        except ValueError:
+            schedule_id = 0
 
         # Parse owner
         owner_data = data.get("owner", {})
@@ -294,7 +305,7 @@ class PipelineSchedulesAPI:
         ]
 
         return PipelineSchedule(
-            id=int(data.get("id", 0)),
+            id=schedule_id,
             description=data.get("description"),
             ref=data.get("ref"),
             cron=data.get("cron"),
@@ -332,7 +343,7 @@ class PipelineSchedulesAPI:
         ]
 
         return PipelineSchedule(
-            id=int(data.get("id", 0)),
+            id=schedule_id,
             description=data.get("description"),
             ref=data.get("ref"),
             cron=data.get("cron"),
