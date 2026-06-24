@@ -52,9 +52,10 @@ def ci_cli():
     default=None,
     help=(
         "Git ref (branch, tag, or SHA) for the lint operation. "
-        "POST: validation context when --dry-run is enabled. "
-        "GET: which ref to read .gitlab-ci.yml from (content_ref). "
-        "Defaults to the project's default branch."
+        "POST: ref context for include resolution and pipeline simulation. "
+        "GET: ref to read .gitlab-ci.yml from (content_ref); also reused "
+        "as the simulation context (dry_run_ref) when --dry-run-ref is "
+        "not provided. Defaults to the project's default branch."
     ),
 )
 @click.option(
@@ -63,17 +64,8 @@ def ci_cli():
     default=None,
     help=(
         "Git ref (branch or tag) used as the pipeline-creation simulation "
-        "context when --dry-run is enabled. Maps to POST: ref, GET: "
-        "dry_run_ref. Defaults to the value of --ref."
-    ),
-)
-@click.option(
-    "--dry-run/--no-dry-run",
-    "dry_run",
-    default=False,
-    help=(
-        "Run a pipeline-creation simulation in addition to the static "
-        "syntax check. (POST/GET: dry_run) [default: --no-dry-run]"
+        "context. Maps to GET: dry_run_ref. For POST, --ref is reused as "
+        "the simulation context. Defaults to the value of --ref."
     ),
 )
 @click.option(
@@ -110,12 +102,17 @@ def validate_ci(
     file_path: Optional[str],
     ref: Optional[str],
     dry_run_ref: Optional[str],
-    dry_run: bool,
     include_jobs: bool,
     output_format: str,
     fail_on_warning: bool,
 ):
     """Validate a GitLab CI/CD configuration using the project CI Lint API.
+
+    A pipeline-creation simulation (``dry_run=true``) is always requested
+    so that ``--ref`` is honored on POST and local includes are resolved
+    against the supplied ref (instead of the project's default branch).
+    Validation is therefore always a real pipeline-creation simulation,
+    not a static-only check.
 
     Mandatory fields by endpoint:
 
@@ -125,7 +122,7 @@ def validate_ci(
 
     \b
     Examples:
-      # Lint a local .gitlab-ci.yml
+      # Lint a local .gitlab-ci.yml (includes resolved against default branch)
       gitlab-toolbox ci validate --project group/project -f .gitlab-ci.yml
 
       # Lint YAML piped through stdin
@@ -134,9 +131,14 @@ def validate_ci(
       # Lint the project's own .gitlab-ci.yml on its default branch
       gitlab-toolbox ci validate --project group/project
 
-      # Simulate a pipeline against a feature branch, with jobs listed
+      # Validate a feature branch's .gitlab-ci.yml + its local includes
+      # against the same branch
       gitlab-toolbox ci validate --project group/project -f .gitlab-ci.yml \\
-          --ref feature/login --dry-run --include-jobs
+          --ref feature/login --include-jobs
+
+      # Override the simulation ref independently of the YAML ref
+      gitlab-toolbox ci validate --project group/project --ref feature/login \\
+          --dry-run-ref main
     """
     project = GitLabClient._repo_path
     if not project:
@@ -186,6 +188,10 @@ def validate_ci(
     # Call the API. The wrapper resolves the project path to a numeric
     # ID internally because the CI Lint endpoints require the numeric
     # ID in their :id path segment.
+    #
+    # ``dry_run`` is always True: the pipeline-creation simulation is
+    # required for --ref to be honored on POST and for local includes to
+    # be resolved against the supplied ref instead of the default branch.
     # ------------------------------------------------------------------
     try:
         if content is not None:
@@ -193,14 +199,14 @@ def validate_ci(
                 project,
                 content,
                 ref=ref,
-                dry_run=dry_run,
+                dry_run=True,
                 include_jobs=include_jobs,
             )
         else:
             result = CILintAPI.lint_project(
                 project,
                 content_ref=ref,
-                dry_run=dry_run,
+                dry_run=True,
                 dry_run_ref=dry_run_ref or ref,
                 include_jobs=include_jobs,
             )
@@ -249,7 +255,6 @@ def validate_ci(
             endpoint=endpoint_label,
             source=source_desc,
             ref=ref or "",
-            dry_run=dry_run,
             include_jobs=include_jobs,
         )
 

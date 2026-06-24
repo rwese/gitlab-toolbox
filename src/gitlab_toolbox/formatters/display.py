@@ -573,7 +573,6 @@ class DisplayFormatter:
         endpoint: str,
         source: str,
         ref: str = "",
-        dry_run: bool = False,
         include_jobs: bool = False,
     ):
         """Display a CI lint result as a human-readable panel.
@@ -585,7 +584,6 @@ class DisplayFormatter:
             source: Human description of where the YAML came from
                 (e.g. a file path or ``<project .gitlab-ci.yml>``).
             ref: Git ref used as lint context (if any).
-            dry_run: Whether ``--dry-run`` was enabled.
             include_jobs: Whether ``--include-jobs`` was enabled.
         """
         if result.valid and not result.has_warnings:
@@ -604,8 +602,6 @@ class DisplayFormatter:
         details += f"[bold]Source:[/bold]   {source}\n"
         if ref:
             details += f"[bold]Ref:[/bold]      {ref}\n"
-        if dry_run:
-            details += "[bold]Mode:[/bold]     dry-run (pipeline-creation simulation)\n"
         if include_jobs:
             details += f"[bold]Jobs:[/bold]     {len(result.jobs)} resolved\n"
 
