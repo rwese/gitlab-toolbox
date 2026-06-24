@@ -240,7 +240,27 @@ gitlab-toolbox pipeline-schedules show --project PROJECT_PATH SCHEDULE_ID
 
 # Trigger a schedule
 gitlab-toolbox pipeline-schedules trigger --project PROJECT_PATH SCHEDULE_ID
+
+# Export schedules (variables AND inputs) to JSON
+gitlab-toolbox pipeline-schedules export --project PROJECT_PATH -o schedules.json
+
+# Import schedules from JSON (variables AND inputs)
+gitlab-toolbox pipeline-schedules import --project PROJECT_PATH -i schedules.json
+gitlab-toolbox pipeline-schedules import --project PROJECT_PATH -i schedules.json --dry-run
 ```
+
+Pipeline schedules have two kinds of values that the export/import round-trip
+preserves:
+
+- **Variables** (`env_var` / `file`): the legacy mechanism, fetched and
+  recreated via the dedicated `/variables` sub-endpoints.
+- **Inputs** (GitLab 17.11+/18.1+): typed values passed to the pipeline
+  spec's `spec.inputs` section. Inputs are sent to the create/update
+  endpoints as an array of `{"name": ..., "value": ...}` entries, and
+  can be removed on update with `{"name": ..., "_destroy": true}`.
+
+Use `--no-include-inputs` / `--no-include-variables` on `export` to drop
+either section from the output.
 
 ## Features
 
