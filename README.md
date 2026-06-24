@@ -185,8 +185,15 @@ gitlab-toolbox pipelines jobs --project PROJECT_PATH PIPELINE_ID
 Lint a CI/CD configuration against the project context using the
 [GitLab CI Lint API](https://docs.gitlab.com/api/lint/).
 
+> `ci validate` always runs a real pipeline-creation simulation
+> (`dry_run=true`). This is required for `--ref` to be honored on the
+> POST endpoint — otherwise the GitLab API would resolve `local:`
+> `include:` files against the project's default branch and produce
+> misleading errors on feature branches. There is no opt-out for a
+> static-only check.
+
 ```bash
-# Lint a local .gitlab-ci.yml file (POST endpoint)
+# Lint a local .gitlab-ci.yml file (POST endpoint, real simulation)
 gitlab-toolbox ci validate --project PROJECT_PATH -f .gitlab-ci.yml
 
 # Lint YAML piped through stdin
@@ -195,9 +202,14 @@ cat .gitlab-ci.yml | gitlab-toolbox ci validate --project PROJECT_PATH -f -
 # Lint the project's own .gitlab-ci.yml on its default branch (GET endpoint)
 gitlab-toolbox ci validate --project PROJECT_PATH
 
-# Simulate a pipeline run against a feature branch and list resolved jobs
+# Validate a feature branch's .gitlab-ci.yml + its local includes
+# against the same branch and list resolved jobs
 gitlab-toolbox ci validate --project PROJECT_PATH -f .gitlab-ci.yml \
-    --ref feature/login --dry-run --include-jobs
+    --ref feature/login --include-jobs
+
+# Override the simulation ref independently of the YAML ref
+gitlab-toolbox ci validate --project PROJECT_PATH --ref feature/login \
+    --dry-run-ref main
 
 # JSON output for piping into other tools
 gitlab-toolbox ci validate --project PROJECT_PATH -f .gitlab-ci.yml --format json | jq '.errors'
@@ -210,8 +222,7 @@ gitlab-toolbox ci validate --project PROJECT_PATH -f .gitlab-ci.yml --fail-on-wa
 | ---------------------------- | -------------------------------------------------------------------------------------- |
 | `-f PATH` / `-f -`           | Path to a CI YAML file, or `-` to read YAML from stdin                                 |
 | `--ref REF`                  | Git ref (branch, tag, or SHA) for the lint operation                                  |
-| `--dry-run-ref REF`          | Ref used as pipeline-creation simulation context when `--dry-run` is enabled         |
-| `--dry-run` / `--no-dry-run` | Run a pipeline-creation simulation in addition to the static check                    |
+| `--dry-run-ref REF`          | Ref used as pipeline-creation simulation context (GET only)                            |
 | `--include-jobs`             | Include the resolved list of jobs in the API response                                 |
 | `--format table\|json`       | Output format (default: `table`)                                                      |
 | `--fail-on-warning`          | Exit with a non-zero status when the lint result contains warnings                    |

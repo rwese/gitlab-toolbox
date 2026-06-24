@@ -185,13 +185,17 @@ def test_lint_content_omits_ref_when_not_provided(monkeypatch):
     calls, fake_request = make_fake_request({"valid": True, "errors": [], "warnings": []})
     monkeypatch.setattr(GitLabClient, "_run_api_request", fake_request)
 
-    CILintAPI.lint_content("group/project", "foo:\n  script: echo 1\n")
+    CILintAPI.lint_content(
+        "group/project",
+        "foo:\n  script: echo 1\n",
+        dry_run=True,
+    )
 
     # Skip the project-lookup call; assert on the lint call only.
     lint_call = calls[1]
     assert lint_call[1] == {
         "content": "foo:\n  script: echo 1\n",
-        "dry_run": False,
+        "dry_run": True,
         "include_jobs": False,
     }
     assert "ref" not in lint_call[1]
@@ -208,7 +212,7 @@ def test_lint_content_skips_lookup_when_project_id_is_numeric(monkeypatch):
 
     monkeypatch.setattr(GitLabClient, "_run_api_request", fake_request)
 
-    result = CILintAPI.lint_content("4242", "build:\n  script: echo 1\n")
+    result = CILintAPI.lint_content("4242", "build:\n  script: echo 1\n", dry_run=True)
 
     assert result is not None
     # Only the lint call should happen; no project lookup.
@@ -217,7 +221,7 @@ def test_lint_content_skips_lookup_when_project_id_is_numeric(monkeypatch):
             "projects/4242/ci/lint",
             {
                 "content": "build:\n  script: echo 1\n",
-                "dry_run": False,
+                "dry_run": True,
                 "include_jobs": False,
             },
             "POST",
@@ -294,11 +298,11 @@ def test_lint_project_minimal_request(monkeypatch):
     calls, fake_request = make_fake_request({"valid": True, "errors": [], "warnings": []})
     monkeypatch.setattr(GitLabClient, "_run_api_request", fake_request)
 
-    CILintAPI.lint_project("group/project")
+    CILintAPI.lint_project("group/project", dry_run=True)
 
     assert calls[1] == (
         f"projects/{FAKE_PROJECT_ID}/ci/lint",
-        {"dry_run": "false", "include_jobs": "false"},
+        {"dry_run": "true", "include_jobs": "false"},
         "GET",
     )
 
@@ -378,8 +382,17 @@ def test_ci_validate_help_lists_all_options():
     assert "--file" in out
     assert "--ref" in out
     assert "--dry-run-ref" in out
-    assert "--dry-run" in out
-    assert "--no-dry-run" in out
+    # --dry-run/--no-dry-run is intentionally absent: validation must
+    # always perform a real pipeline-creation simulation. (Check only
+    # the option names -- otherwise --dry-run-ref matches as a
+    # substring, and the wrapped help text would also match.)
+    options_section = out.split("Options:", 1)[-1]
+    option_lines = [
+        line.strip().split()[0] for line in options_section.splitlines() if line.startswith("  --")
+    ]
+    assert option_lines, f"no options found in help: {out!r}"
+    assert "--dry-run" not in option_lines
+    assert "--no-dry-run" not in option_lines
     assert "--include-jobs" in out
     assert "--no-include-jobs" in out
     assert "--format" in out
@@ -419,7 +432,7 @@ def test_ci_validate_lints_local_file(monkeypatch, tmp_path):
         f"projects/{FAKE_PROJECT_ID}/ci/lint",
         {
             "content": "build:\n  script: echo hi\n",
-            "dry_run": False,
+            "dry_run": True,
             "include_jobs": False,
         },
         "POST",
@@ -478,7 +491,7 @@ def test_ci_validate_uses_get_when_no_file(monkeypatch):
     monkeypatch.setattr(GitLabClient, "_run_api_request", fake_request)
 
     runner = CliRunner()
-    result = runner.invoke(cli, ["ci", "validate", "--ref", "feature/x", "--dry-run"])
+    result = runner.invoke(cli, ["ci", "validate", "--ref", "feature/x"])
 
     assert result.exit_code == 0, result.output
     assert calls[0] == ("projects/group%2Fproject", None, "GET")
@@ -495,6 +508,48 @@ def test_ci_validate_uses_get_when_no_file(monkeypatch):
     )
 
 
+def test_ci_validate_dry_run_is_mandatory(monkeypatch, tmp_path):
+    """The CLI must always request ``dry_run=true`` so --ref is honored on POST."""
+    _set_repo(monkeypatch)
+    yaml_file = tmp_path / ".gitlab-ci.yml"
+    yaml_file.write_text("build:\n  script: echo 1\n")
+
+    calls, fake_request = make_fake_request({"valid": True, "errors": [], "warnings": []})
+    monkeypatch.setattr(GitLabClient, "_run_api_request", fake_request)
+
+    runner = CliRunner()
+    runner.invoke(
+        cli,
+        [
+            "ci",
+            "validate",
+            "-f",
+            str(yaml_file),
+            "--ref",
+            "feature/ref-honored",
+        ],
+    )
+
+    # Validation must always enable the simulation so the GitLab API
+    # resolves local includes against --ref. Otherwise we would silently
+    # validate against the default branch.
+    assert calls[1][1]["dry_run"] is True
+    assert calls[1][1]["ref"] == "feature/ref-honored"
+
+
+def test_ci_validate_rejects_no_dry_run_flag(monkeypatch, tmp_path):
+    """The CLI must not expose --no-dry-run: validation is always real."""
+    _set_repo(monkeypatch)
+    yaml_file = tmp_path / ".gitlab-ci.yml"
+    yaml_file.write_text("build:\n  script: echo 1\n")
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["ci", "validate", "-f", str(yaml_file), "--no-dry-run"])
+
+    assert result.exit_code != 0
+    assert "no such option" in result.output.lower()
+
+
 def test_ci_validate_dry_run_ref_explicit(monkeypatch):
     """--dry-run-ref must take precedence over --ref when provided."""
     _set_repo(monkeypatch)
@@ -505,7 +560,7 @@ def test_ci_validate_dry_run_ref_explicit(monkeypatch):
     runner = CliRunner()
     result = runner.invoke(
         cli,
-        ["ci", "validate", "--ref", "feature/read", "--dry-run-ref", "main", "--dry-run"],
+        ["ci", "validate", "--ref", "feature/read", "--dry-run-ref", "main"],
     )
 
     assert result.exit_code == 0, result.output
@@ -636,7 +691,7 @@ def test_ci_validate_numeric_project_id_skips_lookup(monkeypatch, tmp_path):
             "projects/4242/ci/lint",
             {
                 "content": "build:\n  script: echo 1\n",
-                "dry_run": False,
+                "dry_run": True,
                 "include_jobs": False,
             },
             "POST",
