@@ -244,10 +244,36 @@ gitlab-toolbox pipeline-schedules trigger --project PROJECT_PATH SCHEDULE_ID
 # Export schedules (variables AND inputs) to JSON
 gitlab-toolbox pipeline-schedules export --project PROJECT_PATH -o schedules.json
 
-# Import schedules from JSON (variables AND inputs)
+# Import schedules from JSON (creates new and updates existing)
 gitlab-toolbox pipeline-schedules import --project PROJECT_PATH -i schedules.json
 gitlab-toolbox pipeline-schedules import --project PROJECT_PATH -i schedules.json --dry-run
+# Non-interactive update of existing entries (skips the confirm prompt)
+gitlab-toolbox pipeline-schedules import --project PROJECT_PATH -i schedules.json --accept-schedule-updates
 ```
+
+#### Export / import round-trip
+
+`export` writes each schedule with its `id`, so `import` can update existing
+schedules in place. Matching is done by `id` (the stable key — descriptions
+can change). The flow:
+
+- **Entry has an `id`** that exists in the target project → the schedule is
+  updated (main fields, inputs, and variables are reconciled).
+- **Entry has an `id`** that does *not* exist in the target project → the
+  import fails that entry loudly (the id clearly does not match, so silently
+  creating a duplicate would be misleading).
+- **Entry has no `id`** → a new schedule is created. If the description
+  collides with an existing schedule the import warns that this looks like
+  an old export and a duplicate will be created.
+
+Variables on update are reconciled via the dedicated `/variables` sub-endpoints
+(delete variables not in the JSON, update changed ones, create new ones),
+so the round-trip is idempotent.
+
+Before applying any updates or creating entries that collide with existing
+descriptions, the command prints a plan (`Update existing: N`, `Create new: M`)
+and asks once for confirmation. Use `--accept-schedule-updates` (or
+`--dry-run`) to make the command non-interactive.
 
 Pipeline schedules have two kinds of values that the export/import round-trip
 preserves:
