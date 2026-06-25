@@ -660,6 +660,56 @@ class PipelineSchedulesAPI:
                 return None
 
     @classmethod
+    def set_schedule_variables(
+        cls, project_path: str, schedule_id: int, variables: List[dict]
+    ) -> None:
+        """Reconcile a schedule's variables to match ``variables``.
+
+        The GitLab REST API exposes variables through dedicated sub-endpoints
+        (POST/PUT/DELETE) rather than the main schedule PUT body, so a true
+        round-trip on update needs to:
+          * delete existing variables that are not in ``variables``;
+          * update existing variables whose value, type, or raw flag differ;
+          * create variables in ``variables`` that are not yet present.
+
+        ``idempotent`` is the goal: calling this with the same list twice
+        produces no further API calls on the second run.
+        """
+        current = cls.get_schedule(project_path, schedule_id)
+        if not current:
+            console.print(
+                f"[red]✗ Cannot reconcile variables: schedule #{schedule_id} not found[/red]"
+            )
+            return
+
+        existing_by_key = {v.key: v for v in (current.variables or [])}
+        new_by_key = {str(v.get("key")): v for v in variables if v.get("key") is not None}
+
+        # Drop variables that are no longer wanted.
+        for key in list(existing_by_key):
+            if key not in new_by_key:
+                cls.delete_schedule_variable(project_path, schedule_id, key)
+
+        # Update or create each desired variable.
+        for key, new_var in new_by_key.items():
+            var_data = {
+                "key": key,
+                "value": new_var.get("value", ""),
+                "variable_type": new_var.get("variable_type", "env_var"),
+                "raw": new_var.get("raw", False),
+            }
+            if key in existing_by_key:
+                existing = existing_by_key[key]
+                if (
+                    existing.value != str(var_data["value"])
+                    or existing.variable_type != var_data["variable_type"]
+                    or existing.raw != var_data["raw"]
+                ):
+                    cls.update_schedule_variable(project_path, schedule_id, key, var_data)
+            else:
+                cls.create_schedule_variable(project_path, schedule_id, var_data)
+
+    @classmethod
     def update_schedule(
         cls, project_path: str, schedule_id: int, schedule_data: dict
     ) -> Optional[PipelineSchedule]:

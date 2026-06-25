@@ -401,8 +401,9 @@ def test_export_omits_empty_inputs_by_default(monkeypatch):
 
 
 def test_import_passes_inputs_to_create(monkeypatch):
-    """Importing a JSON payload that contains ``inputs`` should forward them
-    to ``create_schedule`` so the new schedule gets the same input values.
+    """Importing a JSON payload without an ``id`` field is treated as a new
+    schedule; the inputs (and other fields) should be forwarded to
+    ``create_schedule`` so the new schedule gets the same input values.
     """
     from gitlab_toolbox.api.client import GitLabClient
     from gitlab_toolbox.api.pipeline_schedules import PipelineSchedulesAPI
@@ -433,7 +434,13 @@ def test_import_passes_inputs_to_create(monkeypatch):
 
     result = CliRunner().invoke(
         cli,
-        ["pipeline-schedules", "import", "--project", "group/project", "--no-skip-existing"],
+        [
+            "pipeline-schedules",
+            "import",
+            "--project",
+            "group/project",
+            "--accept-schedule-updates",
+        ],
         input=payload,
     )
 
@@ -481,7 +488,7 @@ def test_import_dry_run_reports_input_count(monkeypatch):
                 "import",
                 "--project",
                 "group/project",
-                "--no-skip-existing",
+                "--accept-schedule-updates",
                 "--dry-run",
             ],
             input=payload,
@@ -493,3 +500,418 @@ def test_import_dry_run_reports_input_count(monkeypatch):
     output = stderr_sink.getvalue()
     assert "1 variable(s)" in output
     assert "2 input(s)" in output
+
+
+# ---------------------------------------------------------------------------
+# Import create-vs-update logic
+# ---------------------------------------------------------------------------
+
+
+def test_import_updates_existing_when_id_matches(monkeypatch):
+    """When a JSON entry's ``id`` matches an existing schedule, the import
+    should call ``update_schedule`` (and reconcile variables) rather than
+    creating a duplicate. The confirm prompt is bypassed with
+    --accept-schedule-updates.
+    """
+    from gitlab_toolbox.api.client import GitLabClient
+    from gitlab_toolbox.api.pipeline_schedules import PipelineSchedulesAPI
+
+    GitLabClient._repo_path = "group/project"
+    existing = _make_schedule(id=140, description="UIUX")
+    monkeypatch.setattr(PipelineSchedulesAPI, "get_schedules", lambda *a, **kw: [existing])
+
+    update_calls = []
+    create_calls = []
+
+    def fake_update(project_path, schedule_id, schedule_data):
+        update_calls.append((schedule_id, schedule_data))
+        return existing
+
+    def fake_create(project_path, schedule_data):
+        create_calls.append(schedule_data)
+        return None
+
+    monkeypatch.setattr(PipelineSchedulesAPI, "update_schedule", staticmethod(fake_update))
+    monkeypatch.setattr(PipelineSchedulesAPI, "create_schedule", staticmethod(fake_create))
+    monkeypatch.setattr(
+        PipelineSchedulesAPI,
+        "set_schedule_variables",
+        staticmethod(lambda *a, **kw: None),
+    )
+
+    payload = json.dumps(
+        [
+            {
+                "id": 140,
+                "description": "UIUX",
+                "ref": "refs/heads/main",
+                "cron": "25 13 * * *",
+                "cron_timezone": "Etc/UTC",
+                "active": True,
+                "inputs": [{"name": "engine_repository_branch", "value": "main"}],
+            }
+        ]
+    )
+
+    result = CliRunner().invoke(
+        cli,
+        [
+            "pipeline-schedules",
+            "import",
+            "--project",
+            "group/project",
+            "--accept-schedule-updates",
+        ],
+        input=payload,
+    )
+
+    assert result.exit_code == 0, result.output
+    assert len(update_calls) == 1
+    assert update_calls[0][0] == 140
+    # The id must be stripped from the payload: the API infers the id from
+    # the URL, and a stray id field can confuse downstream handlers.
+    assert "id" not in update_calls[0][1]
+    assert update_calls[0][1]["inputs"] == [{"name": "engine_repository_branch", "value": "main"}]
+    assert create_calls == []
+
+
+def test_import_reconciles_variables_on_update(monkeypatch):
+    """Updating an existing schedule must call ``set_schedule_variables`` with
+    the JSON's variables list so the legacy ``/variables`` sub-endpoints
+    stay in sync (delete / update / create).
+    """
+    from gitlab_toolbox.api.client import GitLabClient
+    from gitlab_toolbox.api.pipeline_schedules import PipelineSchedulesAPI
+
+    GitLabClient._repo_path = "group/project"
+    existing = _make_schedule(id=140, description="UIUX")
+    monkeypatch.setattr(PipelineSchedulesAPI, "get_schedules", lambda *a, **kw: [existing])
+    monkeypatch.setattr(
+        PipelineSchedulesAPI,
+        "update_schedule",
+        staticmethod(lambda *a, **kw: existing),
+    )
+
+    reconcile_calls = []
+
+    def fake_reconcile(project_path, schedule_id, variables):
+        reconcile_calls.append((project_path, schedule_id, variables))
+
+    monkeypatch.setattr(
+        PipelineSchedulesAPI,
+        "set_schedule_variables",
+        staticmethod(fake_reconcile),
+    )
+
+    payload = json.dumps(
+        [
+            {
+                "id": 140,
+                "description": "UIUX",
+                "ref": "refs/heads/main",
+                "cron": "25 13 * * *",
+                "cron_timezone": "Etc/UTC",
+                "active": True,
+                "variables": [
+                    {"key": "FOO", "value": "bar", "variable_type": "env_var", "raw": False}
+                ],
+            }
+        ]
+    )
+
+    result = CliRunner().invoke(
+        cli,
+        [
+            "pipeline-schedules",
+            "import",
+            "--project",
+            "group/project",
+            "--accept-schedule-updates",
+        ],
+        input=payload,
+    )
+
+    assert result.exit_code == 0, result.output
+    assert reconcile_calls == [
+        (
+            "group/project",
+            140,
+            [
+                {
+                    "key": "FOO",
+                    "value": "bar",
+                    "variable_type": "env_var",
+                    "raw": False,
+                }
+            ],
+        )
+    ]
+
+
+def test_import_creates_when_id_missing(monkeypatch):
+    """Entries without an ``id`` are treated as new schedules, even when
+    a schedule with the same description already exists (the old-export
+    case). The duplicate warning is surfaced but the create still goes
+    through with --accept-schedule-updates.
+    """
+    from gitlab_toolbox.api.client import GitLabClient
+    from gitlab_toolbox.api.pipeline_schedules import PipelineSchedulesAPI
+
+    GitLabClient._repo_path = "group/project"
+    existing = _make_schedule(id=140, description="UIUX")
+    monkeypatch.setattr(PipelineSchedulesAPI, "get_schedules", lambda *a, **kw: [existing])
+
+    create_calls = []
+    update_calls = []
+
+    def fake_create(project_path, schedule_data):
+        create_calls.append(schedule_data)
+        return _make_schedule(id=999, description=schedule_data.get("description", ""))
+
+    def fake_update(*a, **kw):
+        update_calls.append((a, kw))
+        return None
+
+    monkeypatch.setattr(PipelineSchedulesAPI, "create_schedule", staticmethod(fake_create))
+    monkeypatch.setattr(PipelineSchedulesAPI, "update_schedule", staticmethod(fake_update))
+
+    payload = json.dumps(
+        [
+            {
+                # No ``id`` here — this is an old-style export.
+                "description": "UIUX",
+                "ref": "main",
+                "cron": "0 0 * * *",
+            }
+        ]
+    )
+
+    result = CliRunner().invoke(
+        cli,
+        [
+            "pipeline-schedules",
+            "import",
+            "--project",
+            "group/project",
+            "--accept-schedule-updates",
+        ],
+        input=payload,
+    )
+
+    assert result.exit_code == 0, result.output
+    assert len(create_calls) == 1
+    assert update_calls == []
+
+
+def test_import_rejects_stale_id(monkeypatch):
+    """If a JSON entry has an ``id`` that does not exist in the target
+    project, the import must surface the error and not silently create a
+    duplicate. The id clearly indicates intent to update, so a missing
+    schedule is a hard failure.
+    """
+    from gitlab_toolbox.api.client import GitLabClient
+    from gitlab_toolbox.api.pipeline_schedules import PipelineSchedulesAPI
+
+    GitLabClient._repo_path = "group/project"
+    monkeypatch.setattr(PipelineSchedulesAPI, "get_schedules", lambda *a, **kw: [])
+
+    create_calls = []
+    update_calls = []
+
+    monkeypatch.setattr(
+        PipelineSchedulesAPI,
+        "create_schedule",
+        staticmethod(lambda *a, **kw: create_calls.append(a) or None),
+    )
+    monkeypatch.setattr(
+        PipelineSchedulesAPI,
+        "update_schedule",
+        staticmethod(lambda *a, **kw: update_calls.append(a) or None),
+    )
+
+    payload = json.dumps([{"id": 9999, "description": "GONE", "ref": "main", "cron": "0 0 * * *"}])
+
+    stderr_sink = io.StringIO()
+    original_file = ps_module.console.file
+    ps_module.console.file = stderr_sink
+    try:
+        result = CliRunner().invoke(
+            cli,
+            [
+                "pipeline-schedules",
+                "import",
+                "--project",
+                "group/project",
+                "--accept-schedule-updates",
+            ],
+            input=payload,
+        )
+    finally:
+        ps_module.console.file = original_file
+
+    assert result.exit_code == 0, result.output
+    assert create_calls == []
+    assert update_calls == []
+    output = stderr_sink.getvalue()
+    assert "id=9999" in output
+    assert "stale" in output.lower()
+
+
+def test_import_dry_run_shows_mixed_plan(monkeypatch):
+    """A dry-run import with both an existing and a new entry must print a
+    plan that distinguishes updates from creates, without hitting the API.
+    """
+    from gitlab_toolbox.api.client import GitLabClient
+    from gitlab_toolbox.api.pipeline_schedules import PipelineSchedulesAPI
+
+    GitLabClient._repo_path = "group/project"
+    existing = _make_schedule(id=140, description="UIUX")
+    monkeypatch.setattr(PipelineSchedulesAPI, "get_schedules", lambda *a, **kw: [existing])
+
+    api_calls = []
+
+    def explode(*a, **kw):
+        api_calls.append((a, kw))
+        raise AssertionError("dry-run should not hit the API")
+
+    monkeypatch.setattr(PipelineSchedulesAPI, "create_schedule", staticmethod(explode))
+    monkeypatch.setattr(PipelineSchedulesAPI, "update_schedule", staticmethod(explode))
+
+    payload = json.dumps(
+        [
+            {
+                "id": 140,
+                "description": "UIUX",
+                "ref": "refs/heads/main",
+                "cron": "25 13 * * *",
+                "cron_timezone": "Etc/UTC",
+                "active": True,
+            },
+            {
+                "description": "NEW-ONE",
+                "ref": "main",
+                "cron": "0 9 * * *",
+            },
+        ]
+    )
+
+    stderr_sink = io.StringIO()
+    original_file = ps_module.console.file
+    ps_module.console.file = stderr_sink
+    try:
+        result = CliRunner().invoke(
+            cli,
+            [
+                "pipeline-schedules",
+                "import",
+                "--project",
+                "group/project",
+                "--dry-run",
+            ],
+            input=payload,
+        )
+    finally:
+        ps_module.console.file = original_file
+
+    assert result.exit_code == 0, result.output
+    assert api_calls == []
+    output = stderr_sink.getvalue()
+    assert "Update existing:" in output
+    assert "Create new:" in output
+    assert "Would update: #140 UIUX" in output
+    assert "Would create: NEW-ONE" in output
+
+
+def test_export_includes_id(monkeypatch):
+    """The export format must include the schedule ``id`` so the matching
+    import can update existing entries in place. This is the wire that
+    makes the export/import round-trip idempotent.
+    """
+    from gitlab_toolbox.api.client import GitLabClient
+    from gitlab_toolbox.api.pipeline_schedules import PipelineSchedulesAPI
+
+    GitLabClient._repo_path = "group/project"
+    schedule = _make_schedule(id=140, description="UIUX")
+    monkeypatch.setattr(PipelineSchedulesAPI, "get_schedules", lambda *a, **kw: [schedule])
+
+    result = _invoke(CliRunner(), ["pipeline-schedules", "export"], io.StringIO())
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.stdout)
+    assert payload[0]["id"] == 140
+
+
+def test_set_schedule_variables_reconciles(monkeypatch):
+    """``set_schedule_variables`` must delete variables that are not in the
+    desired set, create new ones, and leave untouched ones alone (so the
+    second call is idempotent).
+    """
+    from gitlab_toolbox.api.client import GitLabClient
+    from gitlab_toolbox.api.pipeline_schedules import PipelineSchedulesAPI
+
+    GitLabClient._repo_path = "group/project"
+    current = _make_schedule(
+        id=140,
+        variables=[
+            PipelineScheduleVariable(key="KEEP", value="same", variable_type="env_var", raw=False),
+            PipelineScheduleVariable(key="DROP", value="old", variable_type="env_var", raw=False),
+        ],
+    )
+    monkeypatch.setattr(
+        PipelineSchedulesAPI, "get_schedule", staticmethod(lambda *a, **kw: current)
+    )
+
+    deleted = []
+    created = []
+    updated = []
+
+    monkeypatch.setattr(
+        PipelineSchedulesAPI,
+        "delete_schedule_variable",
+        staticmethod(lambda p, s, k: deleted.append(k) or True),
+    )
+    monkeypatch.setattr(
+        PipelineSchedulesAPI,
+        "create_schedule_variable",
+        staticmethod(
+            lambda p, s, v: created.append(v)
+            or PipelineScheduleVariable(
+                key=v["key"],
+                value=v["value"],
+                variable_type=v.get("variable_type", "env_var"),
+                raw=v.get("raw", False),
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        PipelineSchedulesAPI,
+        "update_schedule_variable",
+        staticmethod(
+            lambda p, s, k, v: updated.append((k, v))
+            or PipelineScheduleVariable(
+                key=k,
+                value=v["value"],
+                variable_type=v.get("variable_type", "env_var"),
+                raw=v.get("raw", False),
+            )
+        ),
+    )
+
+    PipelineSchedulesAPI.set_schedule_variables(
+        "group/project",
+        140,
+        [
+            # Unchanged: should not trigger an update.
+            {"key": "KEEP", "value": "same", "variable_type": "env_var", "raw": False},
+            # Changed value: should trigger an update.
+            {"key": "CHANGED", "value": "new", "variable_type": "env_var", "raw": False},
+            # Brand new: should be created.
+            {"key": "NEW", "value": "v", "variable_type": "env_var", "raw": False},
+        ],
+    )
+
+    # CHANGED is not on the schedule yet, so it is created (not updated) on
+    # the first run. KEEP stays, DROP is removed, NEW is added.
+    assert deleted == ["DROP"]
+    assert [c["key"] for c in created] == ["CHANGED", "NEW"]
+    assert updated == []

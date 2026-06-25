@@ -370,20 +370,30 @@ def export_pipeline_schedules(
 @click.option(
     "--dry-run",
     is_flag=True,
-    help="Show what would be created without actually creating schedules",
+    help="Show what would be changed without touching the API",
 )
 @click.option(
-    "--skip-existing/--no-skip-existing",
-    default=True,
-    help="Skip schedules that already exist by description (default: true)",
+    "--accept-schedule-updates",
+    is_flag=True,
+    help="Auto-accept updates to existing schedules without the confirmation "
+    "prompt. Use in CI to make the export/import round-trip non-interactive. "
+    "Without this flag, the command asks once before applying any updates or "
+    "creating entries whose description collides with an existing schedule.",
 )
-def import_pipeline_schedules(project, input, dry_run, skip_existing):
-    """Import pipeline schedules from JSON.
+def import_pipeline_schedules(project, input, dry_run, accept_schedule_updates):
+    """Import pipeline schedules from JSON, creating new ones and updating existing ones.
+
+    Matching is done by the ``id`` field. Schedules whose JSON entry has an
+    ``id`` that exists in the target project are updated in place (main
+    fields, inputs, and variables). Entries without an ``id`` are created as
+    new schedules, with a warning if the description collides with an existing
+    one (typical for old exports made before the ``id`` was added).
 
     Example usage:
         gitlab-toolbox pipeline-schedules import --project group/project < schedules.json
         gitlab-toolbox pipeline-schedules import --project group/project -i schedules.json
         gitlab-toolbox pipeline-schedules import --project group/project -i schedules.json --dry-run
+        gitlab-toolbox pipeline-schedules import --project group/project -i schedules.json --accept-schedule-updates
     """
     if project:
         GitLabClient.set_repo_path(project)
@@ -412,43 +422,92 @@ def import_pipeline_schedules(project, input, dry_run, skip_existing):
         console.print("[yellow]No schedules found in input.[/yellow]")
         return
 
-    existing_descriptions = set()
-    if skip_existing:
-        existing = PipelineSchedulesAPI.get_schedules(project, scope=None, limit=None)
-        existing_descriptions = {s.description for s in existing if s.description}
+    # Index existing schedules by id and by description. Description is
+    # only used to warn about old exports that lack an id.
+    with console.status("[bold green]Fetching existing pipeline schedules..."):
+        existing_schedules = PipelineSchedulesAPI.get_schedules(project, scope=None, limit=None)
+    existing_by_id = {s.id: s for s in existing_schedules if s.id is not None}
+    existing_by_description = {s.description: s for s in existing_schedules if s.description}
 
-    valid_schedules = []
+    # Validate and categorise each entry. The plan records the action so we
+    # can print a summary and ask for a single confirmation.
+    plan = []  # list of (entry, action, target_id, warning)
+    skipped = []  # entries dropped during validation
     for schedule_data in schedules_data:
         if not isinstance(schedule_data, dict):
             console.print("[yellow]⚠ Skipping invalid schedule (not an object)[/yellow]")
             continue
 
         description = schedule_data.get("description", "")
-
-        if skip_existing and description in existing_descriptions:
-            console.print(f"[dim]⏭ Skipping '{description}' (already exists)[/dim]")
-            continue
-
         if not schedule_data.get("ref"):
             console.print(f"[yellow]⚠ Skipping '{description}' (missing 'ref' field)[/yellow]")
             continue
-
         if not schedule_data.get("cron"):
             console.print(f"[yellow]⚠ Skipping '{description}' (missing 'cron' field)[/yellow]")
             continue
 
-        valid_schedules.append(schedule_data)
+        schedule_id = schedule_data.get("id")
+        if schedule_id is not None:
+            if schedule_id in existing_by_id:
+                plan.append((schedule_data, "update", schedule_id, None))
+            else:
+                # Stale id: the export was made against a different project or
+                # the schedule was deleted in the meantime. Refuse to silently
+                # create a new one, because the id clearly does not match.
+                console.print(
+                    f"[red]✗ Schedule id={schedule_id} ('{description}') not found "
+                    f"in {project}; refusing to create as new (id is present and stale).[/red]"
+                )
+                skipped.append(schedule_data)
+        else:
+            warning = None
+            if description in existing_by_description:
+                warning = (
+                    f"'{description}' already exists but the JSON entry has no "
+                    f"id; a new duplicate schedule will be created"
+                )
+            plan.append((schedule_data, "create", None, warning))
 
-    if not valid_schedules:
+    if not plan:
         console.print("[yellow]No valid schedules to import.[/yellow]")
         return
 
-    created_count = 0
-    skipped_count = 0
+    # Surface duplicate warnings before the plan, so the user can see why a
+    # create looks suspicious.
+    for _, _, _, warning in plan:
+        if warning:
+            console.print(f"[yellow]⚠ {warning}[/yellow]")
 
-    for schedule_data in valid_schedules:
-        inputs = schedule_data.get("inputs") or []
-        variables = schedule_data.get("variables") or []
+    # Print the plan and ask for a single confirmation. Dry-runs and the
+    # --accept-schedule-updates shortcut both skip the prompt.
+    update_count = sum(1 for _, a, _, _ in plan if a == "update")
+    create_count = sum(1 for _, a, _, _ in plan if a == "create")
+    duplicate_count = sum(1 for _, _, _, w in plan if w)
+
+    console.print("\n[bold]Import plan:[/bold]")
+    if update_count:
+        console.print(f"  • Update existing: [cyan]{update_count}[/cyan]")
+    if create_count:
+        suffix = (
+            f" [yellow]({duplicate_count} duplicate(s) of existing descriptions)[/yellow]"
+            if duplicate_count
+            else ""
+        )
+        console.print(f"  • Create new:      [cyan]{create_count}[/cyan]{suffix}")
+
+    if not dry_run and not accept_schedule_updates and (update_count or duplicate_count):
+        if not click.confirm("Proceed?", default=False):
+            console.print("[yellow]Aborted.[/yellow]")
+            return
+
+    # Execute the plan.
+    created_count = 0
+    updated_count = 0
+    failed_count = 0
+
+    for entry, action, target_id, _ in plan:
+        inputs = entry.get("inputs") or []
+        variables = entry.get("variables") or []
         extras = []
         if variables:
             extras.append(f"{len(variables)} variable(s)")
@@ -456,34 +515,75 @@ def import_pipeline_schedules(project, input, dry_run, skip_existing):
             extras.append(f"{len(inputs)} input(s)")
         extras_str = f" [{', '.join(extras)}]" if extras else ""
 
-        if dry_run:
-            console.print(
-                f"[cyan]→ Would create: {schedule_data.get('description')} "
-                f"(ref={schedule_data.get('ref')}, cron={schedule_data.get('cron')})"
-                f"{extras_str}[/cyan]"
-            )
-            created_count += 1
-        else:
-            schedule = PipelineSchedulesAPI.create_schedule(project, schedule_data)
+        description = entry.get("description", "")
+
+        if action == "create":
+            if dry_run:
+                console.print(
+                    f"[cyan]→ Would create: {description} "
+                    f"(ref={entry.get('ref')}, cron={entry.get('cron')})"
+                    f"{extras_str}[/cyan]"
+                )
+                created_count += 1
+                continue
+
+            schedule = PipelineSchedulesAPI.create_schedule(project, entry)
             if schedule:
                 console.print(f"[green]✓ Created: {schedule.description}{extras_str}[/green]")
                 created_count += 1
             else:
-                console.print(f"[red]✗ Failed to create: {schedule_data.get('description')}[/red]")
-                skipped_count += 1
+                console.print(f"[red]✗ Failed to create: {description}[/red]")
+                failed_count += 1
+
+        elif action == "update":
+            if dry_run:
+                console.print(
+                    f"[cyan]→ Would update: #{target_id} {description} "
+                    f"(ref={entry.get('ref')}, cron={entry.get('cron')})"
+                    f"{extras_str}[/cyan]"
+                )
+                updated_count += 1
+                continue
+
+            # Strip the id from the payload so the API does not see a stray
+            # field on PUT (the endpoint already knows the id from the URL).
+            update_payload = {k: v for k, v in entry.items() if k != "id"}
+            schedule = PipelineSchedulesAPI.update_schedule(project, target_id, update_payload)
+            if not schedule:
+                console.print(f"[red]✗ Failed to update: #{target_id} {description}[/red]")
+                failed_count += 1
+                continue
+
+            # The main PUT only carries inputs; variables live behind their
+            # own sub-endpoints and need explicit reconciliation.
+            try:
+                PipelineSchedulesAPI.set_schedule_variables(project, target_id, variables)
+            except Exception as e:
+                console.print(f"[red]✗ Failed to reconcile variables for #{target_id}: {e}[/red]")
+                failed_count += 1
+                continue
+
+            console.print(f"[green]✓ Updated: #{target_id} {description}{extras_str}[/green]")
+            updated_count += 1
 
     if dry_run:
         console.print(
-            f"\n[cyan]Dry run complete: {created_count} schedule(s) would be created[/cyan]"
+            f"\n[cyan]Dry run complete: {created_count} would be created, "
+            f"{updated_count} would be updated[/cyan]"
         )
     else:
         console.print(
-            f"\n[green]✓ Import complete: {created_count} created, {skipped_count} skipped[/green]"
+            f"\n[green]✓ Import complete: {created_count} created, "
+            f"{updated_count} updated, {failed_count} failed[/green]"
         )
 
 
 def _schedules_to_export_format(schedules, include_variables=True, include_inputs=True):
     """Convert PipelineSchedule objects to exportable format.
+
+    The ``id`` is included so the matching ``import`` can update existing
+    schedules in place (id is the stable key; descriptions can change).
+    Entries without an ``id`` are treated as new on import.
 
     Inputs are exported as a list of ``{"name": ..., "value": ...}`` dicts to
     match the GitLab REST API response shape and to preserve order. The
@@ -494,6 +594,7 @@ def _schedules_to_export_format(schedules, include_variables=True, include_input
 
     for schedule in schedules:
         schedule_dict = {
+            "id": schedule.id,
             "description": schedule.description,
             "ref": schedule.ref,
             "cron": schedule.cron,
