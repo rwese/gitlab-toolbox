@@ -398,6 +398,64 @@ class GitLabClient:
         return cls._run_api_request(endpoint, params, method)
 
     @classmethod
+    def _run_api_request_raw(
+        cls, endpoint: str, params: Optional[Dict] = None, method: str = "GET"
+    ) -> Optional[str]:
+        """Run a GitLab API request that returns a raw text body.
+
+        Most GitLab API endpoints return JSON, but a few (notably the
+        ``/projects/:id/repository/files/:file/raw`` endpoint) return
+        the resource directly as text. Use this helper for those.
+
+        Args:
+            endpoint: The API endpoint to call (e.g.,
+                ``projects/123/repository/files/.gitlab-ci.yml/raw``).
+            params: Optional query parameters (GET only).
+            method: HTTP method. Only ``GET`` is supported here.
+
+        Returns:
+            The response body as text, or ``None`` if the resource was
+            not found (HTTP 404).
+        """
+        if method != "GET":
+            raise ValueError(f"_run_api_request_raw only supports GET, got {method}")
+
+        if not cls._base_url:
+            cls.configure_from_env()
+        if not cls._base_url:
+            raise ValueError(
+                "GitLab base URL not configured. Call set_base_url() or configure_from_env() first."
+            )
+
+        url = f"{cls._base_url}/api/v4/{endpoint}"
+
+        headers: Dict[str, str] = {"Accept": "text/plain"}
+        if cls._token:
+            headers["Authorization"] = f"Bearer {cls._token}"
+
+        try:
+            if cls._debug:
+                console.print(f"[dim]{method} {url}[/dim]")
+                if params:
+                    console.print(f"[dim]Query params: {params}[/dim]")
+
+            response = requests.get(url, headers=headers, params=params, timeout=cls._timeout)
+            response.raise_for_status()
+            return response.text
+
+        except requests.HTTPError as e:
+            if e.response is not None and e.response.status_code == 404:
+                return None
+            console.print(
+                f"[red]GitLab API error:[/red] "
+                f"{e.response.text if e.response is not None else e}"
+            )
+            raise
+        except requests.RequestException as e:
+            console.print(f"[red]GitLab API request failed:[/red] {e}")
+            raise
+
+    @classmethod
     def paginate(
         cls,
         endpoint: str,

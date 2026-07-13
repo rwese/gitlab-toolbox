@@ -1,7 +1,7 @@
 """Display formatters for various GitLab entities."""
 
 import sys
-from typing import List
+from typing import Dict, List, Optional
 
 from rich.console import Console
 from rich.panel import Panel
@@ -579,6 +579,7 @@ class DisplayFormatter:
         source: str,
         ref: str = "",
         include_jobs: bool = False,
+        variables: Optional[Dict[str, str]] = None,
     ):
         """Display a CI lint result as a human-readable panel.
 
@@ -590,6 +591,9 @@ class DisplayFormatter:
                 (e.g. a file path or ``<project .gitlab-ci.yml>``).
             ref: Git ref used as lint context (if any).
             include_jobs: Whether ``--include-jobs`` was enabled.
+            variables: Optional mapping of variables that were injected
+                into the YAML before linting. Shown in the panel so the
+                user can confirm what was simulated.
         """
         if result.valid and not result.has_warnings:
             status_line = "[bold green]\u2713 CI lint: valid[/bold green]"
@@ -609,6 +613,11 @@ class DisplayFormatter:
             details += f"[bold]Ref:[/bold]      {ref}\n"
         if include_jobs:
             details += f"[bold]Jobs:[/bold]     {len(result.jobs)} resolved\n"
+
+        if variables:
+            details += f"[bold]Variables:[/bold] {len(variables)}\n"
+            for key, value in variables.items():
+                details += f"  [cyan]{key}[/cyan] = {value}\n"
 
         details += f"\n[bold]Errors:[/bold]   {len(result.errors)}\n"
         if result.errors:
