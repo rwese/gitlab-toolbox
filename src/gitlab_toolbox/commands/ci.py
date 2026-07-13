@@ -9,12 +9,18 @@ Three input modes are supported:
 * ``-f -``        — validate YAML piped through stdin (POST endpoint).
 * ``-f`` omitted  — validate the project's own ``.gitlab-ci.yml``
                     (GET endpoint).
+
+Variables can be supplied via ``--variables-env`` (repeatable) to
+simulate a pipeline run with specific CI/CD variables. Because the
+GitLab CI Lint API does not accept a top-level ``variables`` request
+parameter, the supplied variables are injected into the YAML's
+top-level ``variables:`` block before POSTing.
 """
 
 import json
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Dict, Optional, Tuple
 
 import click
 from rich.console import Console
@@ -25,6 +31,48 @@ from ..formatters import DisplayFormatter
 
 # Console for status/info messages (goes to stderr)
 console = Console(file=sys.stderr)
+
+
+def _parse_variables_env(
+    ctx: click.Context, param: click.Parameter, values: Tuple[str, ...]
+) -> Dict[str, str]:
+    """Parse ``--variables-env KEY:VALUE`` pairs into a dict.
+
+    Each occurrence of the flag may contain a single ``KEY:VALUE``
+    pair or multiple pairs separated by commas. Repeatable flags
+    accumulate. The first ``:`` separates the key from the value, so
+    values may themselves contain colons (e.g. URLs).
+
+    Args:
+        ctx: Click context (unused).
+        param: Click parameter (unused).
+        values: All raw values from the command line, in order.
+
+    Returns:
+        Mapping of variable names to their string values. Later
+        occurrences override earlier ones for the same key.
+
+    Raises:
+        click.BadParameter: If a value is missing a colon separator
+            or the key portion is empty.
+    """
+    result: Dict[str, str] = {}
+    for raw in values or ():
+        # Support comma-separated lists per flag, like ``glab ci run``.
+        for spec in raw.split(","):
+            spec = spec.strip()
+            if not spec:
+                continue
+            if ":" not in spec:
+                raise click.BadParameter(
+                    f"expected KEY:VALUE, got {spec!r} " "(missing ':' between key and value)"
+                )
+            key, _, value = spec.partition(":")
+            key = key.strip()
+            if not key:
+                raise click.BadParameter(f"empty variable key in {spec!r}")
+            result[key] = value
+    return result
 
 
 @click.group(name="ci")
@@ -98,6 +146,26 @@ def ci_cli():
         "exit regardless of this flag."
     ),
 )
+@click.option(
+    "-V",
+    "--variables-env",
+    "variables_env",
+    multiple=True,
+    callback=_parse_variables_env,
+    metavar="KEY:VALUE",
+    help=(
+        "Pass variables to the lint simulation in KEY:VALUE format "
+        "(matching ``glab ci run --variables-env``). Repeatable, and "
+        "multiple KEY:VALUE pairs may be passed in a single flag "
+        "separated by commas. Injected into the YAML's top-level "
+        "``variables:`` block; provided values override same-named "
+        "entries already defined at the YAML top level. Without "
+        "``-f``, the project's ``.gitlab-ci.yml`` is fetched and the "
+        "variables are merged into it before linting. Has no effect "
+        "on static-only checks — it only matters when ``dry_run`` is "
+        "true, which is always the case here."
+    ),
+)
 def validate_ci(
     file_path: Optional[str],
     ref: Optional[str],
@@ -105,6 +173,7 @@ def validate_ci(
     include_jobs: bool,
     output_format: str,
     fail_on_warning: bool,
+    variables_env: Dict[str, str],
 ):
     """Validate a GitLab CI/CD configuration using the project CI Lint API.
 
@@ -139,6 +208,17 @@ def validate_ci(
       # Override the simulation ref independently of the YAML ref
       gitlab-toolbox ci validate --project group/project --ref feature/login \\
           --dry-run-ref main
+
+      # Simulate the pipeline with extra variables (overrides existing
+      # top-level YAML variables of the same name)
+      gitlab-toolbox ci validate --project group/project -f .gitlab-ci.yml \\
+          --variables-env ENGINE_CI_PIPELINES_REF:main \\
+          --variables-env RUN_TESTING:0
+
+      # Same, but lint the project's stored .gitlab-ci.yml (the file
+      # is fetched and merged with the variables locally)
+      gitlab-toolbox ci validate --project group/project \\
+          --variables-env DEPLOY_ENV:staging
     """
     project = GitLabClient._repo_path
     if not project:
@@ -180,7 +260,8 @@ def validate_ci(
             source_desc = str(p)
         endpoint_label = "POST /api/v4/projects/{}/ci/lint".format(project.replace("/", "%2F"))
     else:
-        # GET endpoint: validate the project's .gitlab-ci.yml
+        # GET endpoint (no variables) or POST-after-fetch (with variables).
+        # The wrapper handles the variable-injection fallback transparently.
         source_desc = f"{project} .gitlab-ci.yml"
         endpoint_label = "GET /api/v4/projects/{}/ci/lint".format(project.replace("/", "%2F"))
 
@@ -192,6 +273,10 @@ def validate_ci(
     # ``dry_run`` is always True: the pipeline-creation simulation is
     # required for --ref to be honored on POST and for local includes to
     # be resolved against the supplied ref instead of the default branch.
+    #
+    # ``variables`` are injected into the YAML's top-level
+    # ``variables:`` block (see ``api/ci_lint.py``) since the CI Lint
+    # API does not accept variables as a request parameter.
     # ------------------------------------------------------------------
     try:
         if content is not None:
@@ -201,6 +286,7 @@ def validate_ci(
                 ref=ref,
                 dry_run=True,
                 include_jobs=include_jobs,
+                variables=variables_env or None,
             )
         else:
             result = CILintAPI.lint_project(
@@ -209,6 +295,7 @@ def validate_ci(
                 dry_run=True,
                 dry_run_ref=dry_run_ref or ref,
                 include_jobs=include_jobs,
+                variables=variables_env or None,
             )
     except Exception as e:
         console.print(f"[red]CI lint request failed:[/red] {e}")
@@ -218,6 +305,13 @@ def validate_ci(
         # The wrapper already printed "Project not found" for resolution
         # failures; for any other unexpected payload, exit non-zero.
         sys.exit(1)
+
+    # When variables were injected via the file-fetch fallback, the
+    # real API call was POST even though we initially labelled the
+    # endpoint as GET. Correct the label so the panel reflects what
+    # actually happened.
+    if variables_env and content is None:
+        endpoint_label = "POST /api/v4/projects/{}/ci/lint".format(project.replace("/", "%2F"))
 
     # ------------------------------------------------------------------
     # Render output
@@ -247,6 +341,8 @@ def validate_ci(
                 for j in result.jobs
             ],
         }
+        if variables_env:
+            raw["variables"] = variables_env
         print(json.dumps(raw, indent=2))
     else:
         DisplayFormatter.display_ci_lint_result(
@@ -256,6 +352,7 @@ def validate_ci(
             source=source_desc,
             ref=ref or "",
             include_jobs=include_jobs,
+            variables=variables_env or None,
         )
 
     # ------------------------------------------------------------------
