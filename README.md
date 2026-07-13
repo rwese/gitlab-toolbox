@@ -211,6 +211,21 @@ gitlab-toolbox ci validate --project PROJECT_PATH -f .gitlab-ci.yml \
 gitlab-toolbox ci validate --project PROJECT_PATH --ref feature/login \
     --dry-run-ref main
 
+# Simulate the pipeline with extra CI/CD variables (overrides any
+# same-named top-level variables defined in the YAML)
+gitlab-toolbox ci validate --project PROJECT_PATH -f .gitlab-ci.yml \
+    --variables-env ENGINE_CI_PIPELINES_REF:main \
+    --variables-env RUN_TESTING:0
+
+# Multiple KEY:VALUE pairs can be passed per flag (comma-separated)
+gitlab-toolbox ci validate --project PROJECT_PATH -f .gitlab-ci.yml \
+    --variables-env DEPLOY_ENV:staging,REGION:eu-west-1
+
+# Variables also work when linting the project's stored .gitlab-ci.yml
+# (the file is fetched and merged locally before POSTing)
+gitlab-toolbox ci validate --project PROJECT_PATH \
+    --variables-env DEPLOY_ENV:staging
+
 # JSON output for piping into other tools
 gitlab-toolbox ci validate --project PROJECT_PATH -f .gitlab-ci.yml --format json | jq '.errors'
 
@@ -226,8 +241,18 @@ gitlab-toolbox ci validate --project PROJECT_PATH -f .gitlab-ci.yml --fail-on-wa
 | `--include-jobs`             | Include the resolved list of jobs in the API response                                 |
 | `--format table\|json`       | Output format (default: `table`)                                                      |
 | `--fail-on-warning`          | Exit with a non-zero status when the lint result contains warnings                    |
+| `-V`, `--variables-env KEY:VALUE` | Pass variables to the lint simulation (repeatable; comma-separated values per flag). Injected into the YAML's top-level `variables:` block. |
 
 Exit codes: `0` valid (no warnings), `1` invalid or API error, `2` valid with warnings and `--fail-on-warning`.
+
+> **Note on `--variables-env`**: the GitLab CI Lint API does not accept
+> a `variables` request parameter. To simulate variables during lint,
+> `gitlab-toolbox` injects the supplied values into the YAML's
+> top-level `variables:` block before POSTing. Provided values override
+> any same-named entries already defined at the YAML top level. Without
+> `-f`, the project's `.gitlab-ci.yml` is fetched via the repository
+> files API at `--ref` (or the default branch), merged, and then
+> POSTed to the lint endpoint.
 
 ### Pipeline Schedules
 
