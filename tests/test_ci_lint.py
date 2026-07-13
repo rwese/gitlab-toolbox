@@ -4,9 +4,10 @@ import json
 
 from click.testing import CliRunner
 
-from gitlab_toolbox.api.ci_lint import CILintAPI
+from gitlab_toolbox.api.ci_lint import CILintAPI, _merge_variables_into_yaml
 from gitlab_toolbox.api.client import GitLabClient
 from gitlab_toolbox.cli import cli
+from gitlab_toolbox.commands.ci import _parse_variables_env
 from gitlab_toolbox.models import CILintResult, LintJob
 
 # Numeric project ID used by all fake project-lookup responses below.
@@ -697,3 +698,566 @@ def test_ci_validate_numeric_project_id_skips_lookup(monkeypatch, tmp_path):
             "POST",
         )
     ]
+
+
+# ----------------------------------------------------------------------
+# Variables: CLI parser
+# ----------------------------------------------------------------------
+def test_parse_variables_env_single_pair():
+    """A single KEY:VALUE yields a one-entry dict."""
+    parsed = _parse_variables_env(None, None, ("ENGINE:on",))
+    assert parsed == {"ENGINE": "on"}
+
+
+def test_parse_variables_env_multiple_flags():
+    """Repeatable flags accumulate; later values override earlier ones."""
+    parsed = _parse_variables_env(None, None, ("ENGINE:on", "RUN_TESTING:0", "ENGINE:off"))
+    assert parsed == {"ENGINE": "off", "RUN_TESTING": "0"}
+
+
+def test_parse_variables_env_comma_separated():
+    """A single flag may carry multiple comma-separated pairs."""
+    parsed = _parse_variables_env(None, None, ("A:1,B:2,C:3",))
+    assert parsed == {"A": "1", "B": "2", "C": "3"}
+
+
+def test_parse_variables_env_value_may_contain_colons():
+    """Only the first ':' splits key from value (URLs etc. work)."""
+    parsed = _parse_variables_env(None, None, ("URL:http://example.com:8080/path",))
+    assert parsed == {"URL": "http://example.com:8080/path"}
+
+
+def test_parse_variables_env_empty_value_allowed():
+    """An empty value (KEY:) is allowed and stored as the empty string."""
+    parsed = _parse_variables_env(None, None, ("EMPTY:",))
+    assert parsed == {"EMPTY": ""}
+
+
+def test_parse_variables_env_empty_input():
+    """No flags -> empty dict."""
+    assert _parse_variables_env(None, None, ()) == {}
+
+
+def test_parse_variables_env_rejects_missing_colon():
+    """A value without ':' is rejected with a clear message."""
+    import click
+
+    with __import__("pytest").raises(click.BadParameter) as exc_info:
+        _parse_variables_env(None, None, ("nocolon",))
+    assert "missing ':'" in str(exc_info.value)
+
+
+def test_parse_variables_env_rejects_empty_key():
+    """An empty key (' :value' or ':value') is rejected."""
+    import click
+
+    with __import__("pytest").raises(click.BadParameter) as exc_info:
+        _parse_variables_env(None, None, (":value",))
+    assert "empty variable key" in str(exc_info.value)
+
+
+def test_parse_variables_env_strips_whitespace():
+    """Surrounding whitespace around the key is trimmed."""
+    parsed = _parse_variables_env(None, None, ("  KEY  :value",))
+    assert parsed == {"KEY": "value"}
+
+
+# ----------------------------------------------------------------------
+# Variables: YAML merge helper
+# ----------------------------------------------------------------------
+def test_merge_variables_into_yaml_empty_returns_unchanged():
+    """Empty mapping short-circuits: input is returned verbatim."""
+    src = "build:\n  script: echo hi\n"
+    assert _merge_variables_into_yaml(src, {}) == src
+    assert _merge_variables_into_yaml(src, None) == src
+
+
+def test_merge_variables_into_yaml_adds_block_when_absent():
+    """Without an existing ``variables:`` block, a new one is added."""
+    import yaml as _yaml
+
+    src = "build:\n  script: echo hi\n"
+    out = _merge_variables_into_yaml(src, {"A": "1", "B": "2"})
+    parsed = _yaml.safe_load(out)
+    assert parsed["variables"] == {"A": "1", "B": "2"}
+    assert parsed["build"] == {"script": "echo hi"}
+
+
+def test_merge_variables_into_yaml_overrides_existing():
+    """Provided values override existing same-named entries."""
+    import yaml as _yaml
+
+    src = (
+        "variables:\n"
+        "  DEPLOY_ENV: production\n"
+        "  REGION: us-east-1\n"
+        "build:\n"
+        "  script: echo hi\n"
+    )
+    out = _merge_variables_into_yaml(src, {"DEPLOY_ENV": "staging", "NEW": "x"})
+    parsed = _yaml.safe_load(out)
+    assert parsed["variables"]["DEPLOY_ENV"] == "staging"
+    assert parsed["variables"]["REGION"] == "us-east-1"
+    assert parsed["variables"]["NEW"] == "x"
+
+
+def test_merge_variables_into_yaml_preserves_long_form_entries():
+    """Long-form variables (with ``value:``, ``description:``) are preserved."""
+    import yaml as _yaml
+
+    src = (
+        "variables:\n"
+        "  DEPLOY_NOTE:\n"
+        "    description: A note\n"
+        "    value: deploy-me\n"
+        "build:\n"
+        "  script: echo hi\n"
+    )
+    out = _merge_variables_into_yaml(src, {"NEW": "x"})
+    parsed = _yaml.safe_load(out)
+    assert parsed["variables"]["DEPLOY_NOTE"] == {
+        "description": "A note",
+        "value": "deploy-me",
+    }
+    assert parsed["variables"]["NEW"] == "x"
+
+
+def test_merge_variables_into_yaml_overrides_long_form_entry():
+    """A string override replaces a long-form entry for the same key."""
+    import yaml as _yaml
+
+    src = "variables:\n" "  DEPLOY_NOTE:\n" "    description: A note\n" "    value: deploy-me\n"
+    out = _merge_variables_into_yaml(src, {"DEPLOY_NOTE": "simple"})
+    parsed = _yaml.safe_load(out)
+    assert parsed["variables"]["DEPLOY_NOTE"] == "simple"
+
+
+def test_merge_variables_into_yaml_unparseable_returns_original():
+    """If the YAML can't be parsed, the original content is returned untouched."""
+    src = "build:\n  script: [unclosed"
+    out = _merge_variables_into_yaml(src, {"X": "y"})
+    assert out == src
+
+
+def test_merge_variables_into_yaml_non_mapping_top_level_returns_original():
+    """A non-mapping top-level (e.g. bare list) returns the original."""
+    src = "- one\n- two\n"
+    out = _merge_variables_into_yaml(src, {"X": "y"})
+    assert out == src
+
+
+# ----------------------------------------------------------------------
+# Variables: API wrapper integration
+# ----------------------------------------------------------------------
+def test_lint_content_injects_variables_into_yaml(monkeypatch):
+    """Variables passed to ``lint_content`` are merged into the POSTed YAML."""
+    lint_response = {"valid": True, "errors": [], "warnings": []}
+    calls, fake_request = make_fake_request(lint_response)
+    monkeypatch.setattr(GitLabClient, "_run_api_request", fake_request)
+
+    import yaml as _yaml
+
+    result = CILintAPI.lint_content(
+        "group/project",
+        "build:\n  script: echo hi\n",
+        dry_run=True,
+        variables={"DEPLOY_ENV": "staging", "EXTRA": "x"},
+    )
+
+    assert isinstance(result, CILintResult)
+    body = calls[1][1]
+    parsed = _yaml.safe_load(body["content"])
+    assert parsed["variables"] == {"DEPLOY_ENV": "staging", "EXTRA": "x"}
+
+
+def test_lint_content_without_variables_keeps_yaml_intact(monkeypatch):
+    """Without ``variables=``, the original content is sent unchanged."""
+    lint_response = {"valid": True, "errors": [], "warnings": []}
+    calls, fake_request = make_fake_request(lint_response)
+    monkeypatch.setattr(GitLabClient, "_run_api_request", fake_request)
+
+    src = "build:\n  script: echo hi\n"
+    CILintAPI.lint_content("group/project", src, dry_run=True)
+
+    assert calls[1][1]["content"] == src
+
+
+def test_lint_project_with_variables_fetches_then_posts(monkeypatch):
+    """Variables on ``lint_project`` force a fetch + POST instead of GET."""
+    import yaml as _yaml
+
+    calls = []
+
+    def fake_request(endpoint, params=None, method="GET"):
+        calls.append((endpoint, params, method))
+        return {"valid": True, "errors": [], "warnings": []}
+
+    def fake_request_optional(endpoint, params=None, method="GET"):
+        return {"id": FAKE_PROJECT_ID}
+
+    def fake_request_raw(endpoint, params=None, method="GET"):
+        calls.append((endpoint, params, method))
+        return "build:\n  script: echo hi\n"
+
+    monkeypatch.setattr(GitLabClient, "_run_api_request", fake_request)
+    monkeypatch.setattr(GitLabClient, "_run_api_request_optional", fake_request_optional)
+    monkeypatch.setattr(GitLabClient, "_run_api_request_raw", fake_request_raw)
+
+    result = CILintAPI.lint_project(
+        "group/project",
+        content_ref="feature/x",
+        dry_run=True,
+        variables={"DEPLOY_ENV": "staging"},
+    )
+
+    assert isinstance(result, CILintResult)
+
+    # Project lookup (optional), file fetch (raw), then lint POST.
+    raw_calls = [c for c in calls if c[0].endswith("/raw")]
+    assert len(raw_calls) == 1
+    assert raw_calls[0][0] == f"projects/{FAKE_PROJECT_ID}/repository/files/.gitlab-ci.yml/raw"
+    assert raw_calls[0][1] == {"ref": "feature/x"}
+    assert raw_calls[0][2] == "GET"
+
+    lint_calls = [c for c in calls if c[0].endswith("/ci/lint")]
+    assert len(lint_calls) == 1
+    assert lint_calls[0][2] == "POST"
+    parsed_body = _yaml.safe_load(lint_calls[0][1]["content"])
+    assert parsed_body["variables"] == {"DEPLOY_ENV": "staging"}
+
+
+def test_lint_project_without_variables_uses_get(monkeypatch):
+    """No variables -> the original GET path is preserved (no fetch, no POST)."""
+    lint_response = {"valid": True, "errors": [], "warnings": []}
+    calls, fake_request = make_fake_request(lint_response)
+    monkeypatch.setattr(GitLabClient, "_run_api_request", fake_request)
+
+    CILintAPI.lint_project(
+        "group/project",
+        content_ref="feature/x",
+        dry_run=True,
+    )
+
+    # The lint call must be GET (not POST) when no variables are provided.
+    assert calls[1][2] == "GET"
+    assert calls[1][0] == f"projects/{FAKE_PROJECT_ID}/ci/lint"
+
+
+def test_fetch_project_ci_yml_returns_raw_content(monkeypatch):
+    """The raw-files helper returns the response body as text."""
+    monkeypatch.setattr(
+        GitLabClient,
+        "_run_api_request_optional",
+        lambda endpoint, params=None, method="GET": {"id": FAKE_PROJECT_ID},
+    )
+    monkeypatch.setattr(
+        GitLabClient,
+        "_run_api_request_raw",
+        lambda endpoint, params=None, method="GET": "build:\n  script: echo\n",
+    )
+
+    content = CILintAPI.fetch_project_ci_yml("group/project", ref="feature/y")
+    assert content == "build:\n  script: echo\n"
+
+
+def test_fetch_project_ci_yml_returns_none_on_404(monkeypatch):
+    """A 404 from the raw endpoint surfaces as ``None``."""
+    monkeypatch.setattr(
+        GitLabClient,
+        "_run_api_request_optional",
+        lambda endpoint, params=None, method="GET": {"id": FAKE_PROJECT_ID},
+    )
+    monkeypatch.setattr(GitLabClient, "_run_api_request_raw", lambda *a, **kw: None)
+
+    assert CILintAPI.fetch_project_ci_yml("group/project") is None
+
+
+# ----------------------------------------------------------------------
+# Variables: CLI integration
+# ----------------------------------------------------------------------
+def test_ci_validate_help_lists_variables_env_option():
+    """``--variables-env`` must appear in the help output."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["ci", "validate", "--help"])
+    assert result.exit_code == 0
+    out = result.output
+    assert "--variables-env" in out
+    assert "-V" in out
+
+
+def test_ci_validate_variables_env_with_file(monkeypatch, tmp_path):
+    """Variables provided alongside ``-f PATH`` are merged into the POST body."""
+    _set_repo(monkeypatch)
+    yaml_file = tmp_path / ".gitlab-ci.yml"
+    yaml_file.write_text("build:\n  script: echo hi\n")
+
+    import yaml as _yaml
+
+    calls, fake_request = make_fake_request({"valid": True, "errors": [], "warnings": []})
+    monkeypatch.setattr(GitLabClient, "_run_api_request", fake_request)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "ci",
+            "validate",
+            "-f",
+            str(yaml_file),
+            "--variables-env",
+            "ENGINE_CI_PIPELINES_REF:main",
+            "--variables-env",
+            "RUN_TESTING:0",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    body = calls[1][1]
+    assert "ref" not in body  # --ref not provided in this test
+    parsed = _yaml.safe_load(body["content"])
+    assert parsed["variables"] == {
+        "ENGINE_CI_PIPELINES_REF": "main",
+        "RUN_TESTING": "0",
+    }
+
+
+def test_ci_validate_variables_env_with_stdin(monkeypatch):
+    """Variables provided alongside ``-f -`` are merged into the stdin content."""
+    _set_repo(monkeypatch)
+
+    import yaml as _yaml
+
+    calls, fake_request = make_fake_request({"valid": True, "errors": [], "warnings": []})
+    monkeypatch.setattr(GitLabClient, "_run_api_request", fake_request)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "ci",
+            "validate",
+            "-f",
+            "-",
+            "--variables-env",
+            "A:1,B:2",
+        ],
+        input="build:\n  script: echo ok\n",
+    )
+
+    assert result.exit_code == 0, result.output
+    parsed = _yaml.safe_load(calls[1][1]["content"])
+    assert parsed["variables"] == {"A": "1", "B": "2"}
+
+
+def test_ci_validate_variables_env_overrides_yaml_default(monkeypatch, tmp_path):
+    """A CLI-provided variable with the same key as a YAML default overrides it."""
+    _set_repo(monkeypatch)
+    yaml_file = tmp_path / ".gitlab-ci.yml"
+    yaml_file.write_text(
+        "variables:\n" "  DEPLOY_ENV: production\n" "build:\n" "  script: echo hi\n"
+    )
+
+    import yaml as _yaml
+
+    calls, fake_request = make_fake_request({"valid": True, "errors": [], "warnings": []})
+    monkeypatch.setattr(GitLabClient, "_run_api_request", fake_request)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "ci",
+            "validate",
+            "-f",
+            str(yaml_file),
+            "--variables-env",
+            "DEPLOY_ENV:staging",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    parsed = _yaml.safe_load(calls[1][1]["content"])
+    assert parsed["variables"]["DEPLOY_ENV"] == "staging"
+
+
+def test_ci_validate_variables_env_without_file_fetches_project(monkeypatch):
+    """Without ``-f`` and with variables, the project's file is fetched + POSTed."""
+    _set_repo(monkeypatch)
+
+    import yaml as _yaml
+
+    def fake_optional(endpoint, params=None, method="GET"):
+        return {"id": FAKE_PROJECT_ID}
+
+    monkeypatch.setattr(GitLabClient, "_run_api_request_optional", fake_optional)
+    monkeypatch.setattr(
+        GitLabClient,
+        "_run_api_request_raw",
+        lambda endpoint, params=None, method="GET": "build:\n  script: echo hi\n",
+    )
+
+    calls = []
+
+    def fake_request(endpoint, params=None, method="GET"):
+        calls.append((endpoint, params, method))
+        return {"valid": True, "errors": [], "warnings": []}
+
+    monkeypatch.setattr(GitLabClient, "_run_api_request", fake_request)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "ci",
+            "validate",
+            "--variables-env",
+            "DEPLOY_ENV:staging",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+
+    # The lint call must be POST (because variables force the fetch + POST path).
+    lint_calls = [c for c in calls if c[0].endswith("/ci/lint")]
+    assert len(lint_calls) == 1
+    assert lint_calls[0][2] == "POST"
+    parsed = _yaml.safe_load(lint_calls[0][1]["content"])
+    assert parsed["variables"] == {"DEPLOY_ENV": "staging"}
+
+
+def test_ci_validate_variables_env_with_ref_fetches_at_ref(monkeypatch):
+    """Variables + ``--ref`` (no ``-f``) fetch the file at the given ref."""
+    _set_repo(monkeypatch)
+
+    raw_params_seen = []
+
+    def fake_raw(endpoint, params=None, method="GET"):
+        raw_params_seen.append(params)
+        return "build:\n  script: echo hi\n"
+
+    monkeypatch.setattr(
+        GitLabClient, "_run_api_request_optional", lambda *a, **kw: {"id": FAKE_PROJECT_ID}
+    )
+    monkeypatch.setattr(GitLabClient, "_run_api_request_raw", fake_raw)
+
+    calls = []
+
+    def fake_request(endpoint, params=None, method="GET"):
+        calls.append((endpoint, params, method))
+        return {"valid": True, "errors": [], "warnings": []}
+
+    monkeypatch.setattr(GitLabClient, "_run_api_request", fake_request)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "ci",
+            "validate",
+            "--ref",
+            "feature/x",
+            "--variables-env",
+            "DEPLOY_ENV:staging",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert raw_params_seen == [{"ref": "feature/x"}]
+    # The lint POST body's ref also carries the simulation ref (here = --ref).
+    lint_calls = [c for c in calls if c[0].endswith("/ci/lint")]
+    assert lint_calls[0][1]["ref"] == "feature/x"
+
+
+def test_ci_validate_variables_env_invalid_format(monkeypatch, tmp_path):
+    """A value without ``:`` is rejected with a clear error."""
+    _set_repo(monkeypatch)
+    yaml_file = tmp_path / ".gitlab-ci.yml"
+    yaml_file.write_text("build:\n  script: echo 1\n")
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "ci",
+            "validate",
+            "-f",
+            str(yaml_file),
+            "--variables-env",
+            "no-colon-here",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "missing" in result.output.lower() and ":" in result.output
+
+
+def test_ci_validate_variables_env_empty_key(monkeypatch, tmp_path):
+    """An empty key is rejected with a clear error."""
+    _set_repo(monkeypatch)
+    yaml_file = tmp_path / ".gitlab-ci.yml"
+    yaml_file.write_text("build:\n  script: echo 1\n")
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "ci",
+            "validate",
+            "-f",
+            str(yaml_file),
+            "--variables-env",
+            ":value",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "empty variable key" in result.output
+
+
+def test_ci_validate_json_output_includes_variables(monkeypatch, tmp_path):
+    """``--format json`` must include the variables mapping when provided."""
+    _set_repo(monkeypatch)
+    yaml_file = tmp_path / ".gitlab-ci.yml"
+    yaml_file.write_text("build:\n  script: echo 1\n")
+
+    _, fake_request = make_fake_request({"valid": True, "errors": [], "warnings": []})
+    monkeypatch.setattr(GitLabClient, "_run_api_request", fake_request)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "ci",
+            "validate",
+            "-f",
+            str(yaml_file),
+            "--variables-env",
+            "DEPLOY_ENV:staging",
+            "--format",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    parsed = json.loads(result.output)
+    assert parsed["variables"] == {"DEPLOY_ENV": "staging"}
+
+
+def test_ci_validate_json_output_omits_variables_when_unset(monkeypatch, tmp_path):
+    """Without variables, the JSON output must not include a ``variables`` key."""
+    _set_repo(monkeypatch)
+    yaml_file = tmp_path / ".gitlab-ci.yml"
+    yaml_file.write_text("build:\n  script: echo 1\n")
+
+    _, fake_request = make_fake_request({"valid": True, "errors": [], "warnings": []})
+    monkeypatch.setattr(GitLabClient, "_run_api_request", fake_request)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["ci", "validate", "-f", str(yaml_file), "--format", "json"],
+    )
+
+    assert result.exit_code == 0, result.output
+    parsed = json.loads(result.output)
+    assert "variables" not in parsed
