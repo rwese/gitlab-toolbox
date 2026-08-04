@@ -254,6 +254,84 @@ Exit codes: `0` valid (no warnings), `1` invalid or API error, `2` valid with wa
 > files API at `--ref` (or the default branch), merged, and then
 > POSTed to the lint endpoint.
 
+### CI/CD Configuration Inventory
+
+Inventory the CI/CD variables and credentials of projects and groups, including
+metadata the UI spreads across several pages (creation time, scopes, access
+level, expiry, last use).
+
+```bash
+# Effective variables for a project: own variables plus everything inherited
+# from its parent groups, each tagged direct / inherited / override
+gitlab-toolbox ci variables list --project GROUP/PROJECT
+
+# Only the variables defined on the scope itself (no parent-group lookup)
+gitlab-toolbox ci variables list --project GROUP/PROJECT --direct-only
+
+# Also show the parent entries that an override masks
+gitlab-toolbox ci variables list --project GROUP/PROJECT --show-shadowed
+
+# Sweep a whole group tree
+gitlab-toolbox ci variables list --group GROUP --include-subgroups --include-projects
+
+# Reveal raw values (redacted by default) and filter by environment
+gitlab-toolbox ci variables list --project GROUP/PROJECT --reveal --environment production
+
+# Credentials: access tokens, deploy tokens, trigger tokens, deploy keys
+gitlab-toolbox ci tokens list --group GROUP --include-subgroups
+
+# Tokens expiring within 30 days, or unused for 90 days
+gitlab-toolbox ci tokens list --group GROUP --expiring-in 30
+gitlab-toolbox ci tokens list --group GROUP --unused-for 90 --state active
+
+# Only certain kinds
+gitlab-toolbox ci tokens list --project GROUP/PROJECT --kind access,trigger
+
+# Everything for the selected scopes as one JSON document
+gitlab-toolbox ci inventory --group GROUP --include-projects -O inventory.json
+```
+
+| Option                                     | Description                                                      |
+| ------------------------------------------ | ---------------------------------------------------------------- |
+| `--project PATH` / `--group PATH`          | Scope selection (repeatable)                                     |
+| `--include-subgroups` / `--include-projects` | Recurse into descendant groups / their projects                |
+| `--archived`                               | Include archived projects (skipped by default)                   |
+| `--concurrency N`                          | Parallel API requests (default 8)                                |
+| `--direct-only`                            | Variables: skip the parent-group chain                           |
+| `--show-shadowed`                          | Variables: also list parent entries masked by an override        |
+| `--reveal`                                 | Variables: print raw values instead of fingerprints              |
+| `--environment ENV` / `--type TYPE`        | Variables: filter by environment scope / `env_var`\|`file`       |
+| `--kind LIST`                              | Tokens: `access`, `deploy`, `trigger`, `key`                     |
+| `--state STATE`                            | Tokens: `active`, `expired`, `revoked`, `all`                    |
+| `--expiring-in N` / `--unused-for N`       | Tokens: expiry and staleness filters                             |
+| `-O`, `--output-file PATH`                 | Write the rendered output to a file                              |
+
+**Inheritance markers.** Each variable carries an `origin`:
+
+| Origin      | Marker | Meaning                                                    |
+| ----------- | ------ | ---------------------------------------------------------- |
+| `direct`    |        | Defined on the queried scope                                |
+| `inherited` | `↑`    | Comes from a parent group (`defined_in` names it)           |
+| `override`  | `⤺`    | Defined locally and masking a parent entry (`overrides`)    |
+| `shadowed`  | `✗`    | The masked parent entry (only with `--show-shadowed`)       |
+
+**Value redaction.** Values are redacted by default in every format: JSON
+returns `value: null` plus `value_fingerprint` (`sha256:` prefix) and
+`value_length`, which is enough to tell whether an override actually changes
+the inherited value. Use `--reveal` to print raw values.
+
+**Non-admin by design.** Only endpoints a Maintainer/Owner token can read are
+called. Consequences:
+
+- Instance-level variables (`admin/ci/variables`) are never fetched, so `origin`
+  is relative to the readable group chain and the JSON envelope always reports
+  `instance_scope_included: false`.
+- `last_used_ips` exists only on personal access tokens; for project/group
+  access tokens it renders `n/a`.
+- Deploy tokens expose neither a creation time nor usage data (`n/a`).
+- Scopes the token may not read are skipped and listed under `skipped` in JSON
+  (and summarised on stderr), instead of aborting the sweep.
+
 ### Pipeline Schedules
 
 ```bash
@@ -322,6 +400,7 @@ either section from the output.
 - **Merge Requests**: View, search, and filter with advanced pipeline status filtering
 - **CI/CD Pipelines**: Monitor pipeline status and view jobs
 - **CI Lint**: Validate `.gitlab-ci.yml` against the GitLab CI Lint API (file, stdin, or project)
+- **CI/CD Configuration Inventory**: Variables with inheritance provenance, plus access/deploy/trigger tokens and deploy keys
 - **Pipeline Schedules**: List, view, and trigger schedules with full details
 - **Pipeline Status Filtering**: Filter MRs by latest pipeline status (like GitLab's UI)
 - **Performance**: Optimized API calls with date filtering and source type restrictions
