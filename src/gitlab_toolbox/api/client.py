@@ -4,7 +4,7 @@ import json
 import os
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import requests
 from rich.console import Console
@@ -277,7 +277,11 @@ class GitLabClient:
 
     @classmethod
     def _run_api_request(
-        cls, endpoint: str, params: Optional[Dict] = None, method: str = "GET"
+        cls,
+        endpoint: str,
+        params: Optional[Dict] = None,
+        method: str = "GET",
+        suppress_errors: bool = False,
     ) -> Any:
         """Run a GitLab API request and return JSON result.
 
@@ -285,6 +289,7 @@ class GitLabClient:
             endpoint: The API endpoint to call (e.g., 'groups', 'projects/123')
             params: Optional query parameters (for GET) or body data (for POST/PUT/PATCH)
             method: HTTP method (GET, POST, PUT, DELETE, etc.)
+            suppress_errors: Do not print API errors; the caller reports them
 
         Returns:
             Parsed JSON response (dict or list)
@@ -334,6 +339,8 @@ class GitLabClient:
             return result
 
         except requests.HTTPError as e:
+            if suppress_errors:
+                raise
             # Try to parse GitLab API error response
             try:
                 error_data = e.response.json() if e.response.content else {}
@@ -388,6 +395,87 @@ class GitLabClient:
                 return None
             # Re-raise other HTTP errors
             raise
+
+    @classmethod
+    def _run_api_request_safe(
+        cls, endpoint: str, params: Optional[Dict] = None, method: str = "GET"
+    ) -> Tuple[Optional[Any], Optional[str]]:
+        """Run a request, converting access/missing errors into a reason string.
+
+        Group sweeps must not abort because one project denies access, so
+        401/403/404 responses are returned as ``(None, reason)`` instead of
+        raising. All other errors still propagate.
+
+        Args:
+            endpoint: The API endpoint to call
+            params: Optional query parameters or body data
+            method: HTTP method
+
+        Returns:
+            Tuple of ``(data, None)`` on success or ``(None, reason)`` when the
+            resource is forbidden or missing.
+        """
+        try:
+            return cls._run_api_request(endpoint, params, method, suppress_errors=True), None
+        except requests.HTTPError as e:
+            status = e.response.status_code if e.response is not None else None
+            if status in (401, 403, 404):
+                reasons = {
+                    401: "401 Unauthorized",
+                    403: "403 Forbidden (insufficient role)",
+                    404: "404 Not Found",
+                }
+                return None, reasons[status]
+            raise
+
+    @classmethod
+    def paginate_safe(
+        cls,
+        endpoint: str,
+        params: Optional[Dict] = None,
+        per_page: int = 100,
+        limit: Optional[int] = None,
+    ) -> Tuple[Optional[List[Dict]], Optional[str]]:
+        """Paginate an endpoint, returning ``(None, reason)`` on 401/403/404.
+
+        Args:
+            endpoint: The API endpoint to call
+            params: Optional query parameters
+            per_page: Number of items per page
+            limit: Maximum number of items to fetch
+
+        Returns:
+            Tuple of ``(items, None)`` or ``(None, reason)``.
+        """
+        params = dict(params or {})
+        if limit:
+            per_page = min(limit, per_page)
+        params["per_page"] = str(per_page)
+
+        items: List[Dict] = []
+        page = 1
+
+        while True:
+            params["page"] = str(page)
+            result, reason = cls._run_api_request_safe(endpoint, params)
+
+            if reason:
+                return None, reason
+            if not result or not isinstance(result, list):
+                break
+
+            items.extend(result)
+
+            if limit and len(items) >= limit:
+                items = items[:limit]
+                break
+
+            page += 1
+
+            if len(result) < per_page:
+                break
+
+        return items, None
 
     # Legacy alias for backward compatibility
     @classmethod
