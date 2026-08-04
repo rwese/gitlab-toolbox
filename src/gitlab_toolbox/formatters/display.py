@@ -11,6 +11,9 @@ from rich import box
 
 from ..models import (
     CILintResult,
+    CIToken,
+    CIVariable,
+    SkippedScope,
     Group,
     Project,
     MergeRequest,
@@ -651,3 +654,147 @@ class DisplayFormatter:
 
         panel = Panel(details, title="CI Lint Result", border_style=border)
         console_stdout.print(panel)
+
+    # CI/CD configuration display methods
+    @staticmethod
+    def display_ci_variables_table(
+        variables: List["CIVariable"],
+        skipped: Optional[List["SkippedScope"]] = None,
+        reveal: bool = False,
+    ):
+        """Display CI/CD variables with inheritance provenance as a table."""
+        table = Table(
+            title="CI/CD Variables",
+            box=box.ROUNDED,
+            show_header=True,
+            header_style="bold magenta",
+        )
+
+        table.add_column("Scope", style="cyan", no_wrap=False)
+        table.add_column("Key", style="yellow", no_wrap=False)
+        table.add_column("Origin", style="white")
+        table.add_column("Defined in", style="blue", no_wrap=False)
+        table.add_column("Env", style="green")
+        table.add_column("Type", style="white")
+        table.add_column("Flags", style="magenta")
+        table.add_column("Value" if reveal else "Value (redacted)", style="white", no_wrap=False)
+
+        origin_styles = {
+            "direct": "white",
+            "inherited": "dim",
+            "override": "bold yellow",
+            "shadowed": "dim strike",
+        }
+
+        last_scope = None
+        for variable in variables:
+            style = origin_styles.get(variable.origin, "white")
+            scope_col = variable.scope_path if variable.scope_path != last_scope else ""
+            last_scope = variable.scope_path
+
+            origin_col = variable.origin
+            if variable.origin == "override" and variable.overrides:
+                origin_col = f"override of {variable.overrides}"
+            elif variable.origin == "shadowed" and variable.overridden_by:
+                origin_col = f"shadowed by {variable.overridden_by}"
+
+            flags = []
+            if variable.protected:
+                flags.append("protected")
+            if variable.masked:
+                flags.append("masked")
+            if variable.hidden:
+                flags.append("hidden")
+            if variable.raw:
+                flags.append("raw")
+
+            table.add_row(
+                scope_col,
+                f"[{style}]{variable.display_key}[/{style}]",
+                f"[{style}]{origin_col}[/{style}]",
+                variable.defined_in,
+                variable.environment_scope,
+                variable.variable_type,
+                ", ".join(flags) or "[dim]none[/dim]",
+                variable.display_value,
+            )
+
+        console_stdout.print(table)
+        DisplayFormatter._print_skipped(skipped)
+
+    @staticmethod
+    def display_ci_tokens_table(
+        tokens: List["CIToken"], skipped: Optional[List["SkippedScope"]] = None
+    ):
+        """Display CI/CD credentials as a table."""
+        table = Table(
+            title="CI/CD Credentials",
+            box=box.ROUNDED,
+            show_header=True,
+            header_style="bold magenta",
+        )
+
+        table.add_column("Scope", style="cyan", no_wrap=False)
+        table.add_column("Kind", style="blue")
+        table.add_column("Name", style="yellow", no_wrap=False)
+        table.add_column("State", style="white")
+        table.add_column("Scopes / Role", style="green", no_wrap=False)
+        table.add_column("Created", style="white")
+        table.add_column("Expires", style="white")
+        table.add_column("Last used", style="magenta")
+        table.add_column("Last IPs", style="dim")
+
+        state_styles = {
+            "active": "[green]active[/green]",
+            "expired": "[red]expired[/red]",
+            "revoked": "[dim]revoked[/dim]",
+        }
+
+        last_scope = None
+        for token in tokens:
+            scope_col = token.scope_path if token.scope_path != last_scope else ""
+            last_scope = token.scope_path
+
+            permissions = list(token.scopes)
+            if token.access_level_description:
+                permissions.append(f"role={token.access_level_description}")
+            if token.can_push is not None:
+                permissions.append("push" if token.can_push else "read-only")
+
+            expires = token.expires_at or "[red]never[/red]"
+            days = token.days_until_expiry
+            if token.expires_at and days is not None and 0 <= days <= 30:
+                expires = f"[yellow]{token.expires_at} ({days}d)[/yellow]"
+
+            if token.last_used_at:
+                last_used = token.last_used_at[:10]
+            elif token.kind == "deploy":
+                last_used = "[dim]n/a[/dim]"
+            else:
+                last_used = "[yellow]never[/yellow]"
+
+            table.add_row(
+                scope_col,
+                token.kind,
+                token.name,
+                state_styles.get(token.state, token.state),
+                ", ".join(permissions) or "[dim]n/a[/dim]",
+                (token.created_at or "")[:10] or "[dim]n/a[/dim]",
+                expires,
+                last_used,
+                ", ".join(token.last_used_ips) if token.last_used_ips else "[dim]n/a[/dim]",
+            )
+
+        console_stdout.print(table)
+        DisplayFormatter._print_skipped(skipped)
+
+    @staticmethod
+    def _print_skipped(skipped: Optional[List["SkippedScope"]]):
+        """Report scopes that could not be read (to stderr)."""
+        if not skipped:
+            return
+        console_stderr.print(
+            f"[yellow]{len(skipped)} scope(s) skipped (insufficient access or missing):[/yellow]"
+        )
+        for entry in skipped:
+            console_stderr.print(f"  [dim]{entry.ref} {entry.resource}: {entry.reason}[/dim]")

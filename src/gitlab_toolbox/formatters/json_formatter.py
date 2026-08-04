@@ -2,10 +2,13 @@
 
 import json
 from dataclasses import asdict
-from typing import List
+from typing import List, Optional
 
 from ..models import (
+    CIToken,
+    CIVariable,
     Group,
+    SkippedScope,
     Project,
     MergeRequest,
     Pipeline,
@@ -126,3 +129,38 @@ class JSONFormatter:
     def format_user_counts(counts: UserCounts) -> str:
         """Format user counts as JSON."""
         return json.dumps(asdict(counts), indent=2)
+
+    @staticmethod
+    def format_ci_variables(
+        variables: List[CIVariable],
+        skipped: Optional[List[SkippedScope]] = None,
+        reveal: bool = False,
+    ) -> str:
+        """Format CI/CD variables as a JSON envelope.
+
+        ``instance_scope_included`` is always False: instance-level variables
+        require an admin token, so ``origin`` is relative to the readable group
+        chain.
+        """
+        return json.dumps(
+            {
+                "instance_scope_included": False,
+                "reveal": reveal,
+                "skipped": [asdict(s) for s in skipped or []],
+                "variables": [v.to_dict() for v in variables],
+            },
+            indent=2,
+        )
+
+    @staticmethod
+    def format_ci_tokens(
+        tokens: List[CIToken], skipped: Optional[List[SkippedScope]] = None
+    ) -> str:
+        """Format CI/CD credentials as a JSON envelope."""
+        return json.dumps(
+            {
+                "skipped": [asdict(s) for s in skipped or []],
+                "tokens": [t.to_dict() for t in tokens],
+            },
+            indent=2,
+        )

@@ -366,3 +366,12 @@ def validate_ci(
     if result.has_warnings and fail_on_warning:
         sys.exit(2)
     sys.exit(0)
+
+
+# Register the CI/CD configuration inventory subcommands (variables, tokens,
+# inventory). Imported at the bottom to avoid a circular import: ci_config
+# imports nothing from this module, but keeps the registration next to the
+# group it extends.
+from .ci_config import register as _register_ci_config  # noqa: E402
+
+_register_ci_config(ci_cli)

@@ -1,8 +1,8 @@
 """Markdown table output formatter."""
 
-from typing import List
+from typing import List, Optional
 
-from ..models import Group, Project, MergeRequest, Pipeline, Job
+from ..models import CIToken, CIVariable, Group, Job, MergeRequest, Pipeline, Project, SkippedScope
 
 
 class MarkdownFormatter:
@@ -153,5 +153,69 @@ class MarkdownFormatter:
             duration = f"{job.duration:.1f}s" if job.duration else "N/A"
             started = job.started_at or "N/A"
             lines.append(f"| {job.name} | {job.stage} | {job.status} | {duration} | {started} |")
+
+        return "\n".join(lines)
+
+    @staticmethod
+    def format_ci_variables(
+        variables: List[CIVariable],
+        skipped: Optional[List[SkippedScope]] = None,
+        reveal: bool = False,
+    ) -> str:
+        """Format CI/CD variables as a Markdown table."""
+        value_header = "Value" if reveal else "Value (redacted)"
+        lines = [
+            f"| Scope | Key | Origin | Defined in | Env | Type | Flags | {value_header} |",
+            "|-------|-----|--------|------------|-----|------|-------|-------|",
+        ]
+
+        for variable in variables:
+            flags = []
+            if variable.protected:
+                flags.append("protected")
+            if variable.masked:
+                flags.append("masked")
+            if variable.hidden:
+                flags.append("hidden")
+            if variable.raw:
+                flags.append("raw")
+
+            origin = variable.origin
+            if variable.origin == "override" and variable.overrides:
+                origin = f"override of `{variable.overrides}`"
+
+            value = variable.value if reveal else variable.display_value
+
+            lines.append(
+                f"| {variable.scope_path} | `{variable.key}` | {origin} | "
+                f"`{variable.defined_in}` | {variable.environment_scope} | "
+                f"{variable.variable_type} | {', '.join(flags) or '-'} | {value or '-'} |"
+            )
+
+        return "\n".join(lines)
+
+    @staticmethod
+    def format_ci_tokens(
+        tokens: List[CIToken], skipped: Optional[List[SkippedScope]] = None
+    ) -> str:
+        """Format CI/CD credentials as a Markdown table."""
+        lines = [
+            "| Scope | Kind | Name | State | Scopes / Role | Created | Expires | Last used | Last IPs |",
+            "|-------|------|------|-------|---------------|---------|---------|-----------|----------|",
+        ]
+
+        for token in tokens:
+            permissions = list(token.scopes)
+            if token.access_level_description:
+                permissions.append(f"role={token.access_level_description}")
+            if token.can_push is not None:
+                permissions.append("push" if token.can_push else "read-only")
+
+            lines.append(
+                f"| {token.scope_path} | {token.kind} | {token.name} | {token.state} | "
+                f"{', '.join(permissions) or '-'} | {(token.created_at or '-')[:10]} | "
+                f"{token.expires_at or 'never'} | {token.last_used_at or 'never'} | "
+                f"{', '.join(token.last_used_ips) if token.last_used_ips else '-'} |"
+            )
 
         return "\n".join(lines)

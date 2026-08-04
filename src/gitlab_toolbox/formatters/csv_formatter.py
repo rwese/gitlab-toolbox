@@ -2,10 +2,13 @@
 
 import csv
 import io
-from typing import List
+from typing import List, Optional
 
 from ..models import (
+    CIToken,
+    CIVariable,
     Group,
+    SkippedScope,
     Project,
     MergeRequest,
     Pipeline,
@@ -277,4 +280,104 @@ class CSVFormatter:
         writer.writerow(["Name", "Count"])
         for key, value in counts.raw.items():
             writer.writerow([key, value])
+        return output.getvalue()
+
+    @staticmethod
+    def format_ci_variables(
+        variables: List[CIVariable],
+        skipped: Optional[List[SkippedScope]] = None,
+        reveal: bool = False,
+    ) -> str:
+        """Format CI/CD variables as CSV."""
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(
+            [
+                "Scope Kind",
+                "Scope Path",
+                "Key",
+                "Environment Scope",
+                "Origin",
+                "Defined In",
+                "Overrides",
+                "Inheritance Depth",
+                "Type",
+                "Protected",
+                "Masked",
+                "Hidden",
+                "Raw",
+                "Description",
+                "Value" if reveal else "Value Fingerprint",
+                "Value Length",
+            ]
+        )
+        for variable in variables:
+            writer.writerow(
+                [
+                    variable.scope_kind,
+                    variable.scope_path,
+                    variable.key,
+                    variable.environment_scope,
+                    variable.origin,
+                    variable.defined_in,
+                    variable.overrides or "",
+                    variable.inheritance_depth,
+                    variable.variable_type,
+                    variable.protected,
+                    variable.masked,
+                    variable.hidden,
+                    variable.raw,
+                    variable.description or "",
+                    (variable.value or "") if reveal else (variable.value_fingerprint or ""),
+                    variable.value_length if variable.value_length is not None else "",
+                ]
+            )
+        return output.getvalue()
+
+    @staticmethod
+    def format_ci_tokens(
+        tokens: List[CIToken], skipped: Optional[List[SkippedScope]] = None
+    ) -> str:
+        """Format CI/CD credentials as CSV."""
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(
+            [
+                "Scope Kind",
+                "Scope Path",
+                "Kind",
+                "ID",
+                "Name",
+                "State",
+                "Scopes",
+                "Access Level",
+                "Role",
+                "Created At",
+                "Expires At",
+                "Days Until Expiry",
+                "Last Used At",
+                "Last Used IPs",
+                "Can Push",
+            ]
+        )
+        for token in tokens:
+            writer.writerow(
+                [
+                    token.scope_kind,
+                    token.scope_path,
+                    token.kind,
+                    token.id if token.id is not None else "",
+                    token.name,
+                    token.state,
+                    " ".join(token.scopes),
+                    token.access_level if token.access_level is not None else "",
+                    token.access_level_description or "",
+                    token.created_at or "",
+                    token.expires_at or "",
+                    token.days_until_expiry if token.days_until_expiry is not None else "",
+                    token.last_used_at or "",
+                    " ".join(token.last_used_ips) if token.last_used_ips else "",
+                    token.can_push if token.can_push is not None else "",
+                ]
+            )
         return output.getvalue()
