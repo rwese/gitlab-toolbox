@@ -49,7 +49,7 @@ def ancestor_group_paths(path: str, scope_kind: str) -> List[str]:
     """Return ancestor group paths, outermost first.
 
     Args:
-        path: Full path of the scope (e.g. ``ps/devops/app``).
+        path: Full path of the scope (e.g. ``acme/platform/app``).
         scope_kind: ``project`` or ``group``.
 
     Returns:

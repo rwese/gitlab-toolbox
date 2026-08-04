@@ -18,7 +18,7 @@ class Scope:
 
     @property
     def ref(self) -> str:
-        """Return a stable ``kind:path`` reference (e.g. ``group:ps/devops``)."""
+        """Return a stable ``kind:path`` reference (e.g. ``group:acme/platform``)."""
         return f"{self.kind}:{self.path}"
 
     @property

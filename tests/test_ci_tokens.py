@@ -14,8 +14,8 @@ from gitlab_toolbox.models.ci_token import (
     CIToken,
 )
 
-PROJECT = Scope(kind=SCOPE_PROJECT, path="ps/devops/app", id=100)
-GROUP = Scope(kind=SCOPE_GROUP, path="ps/devops", id=62)
+PROJECT = Scope(kind=SCOPE_PROJECT, path="acme/platform/app", id=100)
+GROUP = Scope(kind=SCOPE_GROUP, path="acme/platform", id=62)
 
 
 def _iso(days_from_now: int) -> str:
@@ -155,7 +155,7 @@ def _token(**overrides) -> CIToken:
         id=1,
         name="t",
         scope_kind=SCOPE_GROUP,
-        scope_path="ps",
+        scope_path="acme",
     )
     defaults.update(overrides)
     return CIToken(**defaults)

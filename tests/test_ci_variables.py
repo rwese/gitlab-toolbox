@@ -28,7 +28,7 @@ def _raw(key, value="secret", **overrides):
     return data
 
 
-PROJECT = Scope(kind=SCOPE_PROJECT, path="ps/devops/app", id=100)
+PROJECT = Scope(kind=SCOPE_PROJECT, path="acme/platform/app", id=100)
 
 
 def _patch_variables(monkeypatch, payloads):
@@ -44,8 +44,8 @@ def test_direct_only_skips_parent_chain(monkeypatch):
     _patch_variables(
         monkeypatch,
         {
-            "project:ps/devops/app": [_raw("LOCAL")],
-            "group:ps": [_raw("GLOBAL")],
+            "project:acme/platform/app": [_raw("LOCAL")],
+            "group:acme": [_raw("GLOBAL")],
         },
     )
 
@@ -61,16 +61,16 @@ def test_inherited_variable_is_tagged_with_defining_group(monkeypatch):
     _patch_variables(
         monkeypatch,
         {
-            "project:ps/devops/app": [],
-            "group:ps/devops": [],
-            "group:ps": [_raw("GLOBAL")],
+            "project:acme/platform/app": [],
+            "group:acme/platform": [],
+            "group:acme": [_raw("GLOBAL")],
         },
     )
 
     variables, _ = CIVariablesAPI.resolve([PROJECT])
 
     assert variables[0].origin == ORIGIN_INHERITED
-    assert variables[0].defined_in == "group:ps"
+    assert variables[0].defined_in == "group:acme"
     assert variables[0].inheritance_depth == 2
     assert variables[0].display_key.startswith("↑")
 
@@ -79,9 +79,9 @@ def test_project_value_overrides_group_value(monkeypatch):
     _patch_variables(
         monkeypatch,
         {
-            "project:ps/devops/app": [_raw("TOKEN", "project-value")],
-            "group:ps/devops": [_raw("TOKEN", "group-value")],
-            "group:ps": [_raw("TOKEN", "root-value")],
+            "project:acme/platform/app": [_raw("TOKEN", "project-value")],
+            "group:acme/platform": [_raw("TOKEN", "group-value")],
+            "group:acme": [_raw("TOKEN", "root-value")],
         },
     )
 
@@ -90,18 +90,18 @@ def test_project_value_overrides_group_value(monkeypatch):
     assert len(variables) == 1
     winner = variables[0]
     assert winner.origin == ORIGIN_OVERRIDE
-    assert winner.defined_in == "project:ps/devops/app"
+    assert winner.defined_in == "project:acme/platform/app"
     # The nearest masked scope is reported, not the outermost one.
-    assert winner.overrides == "group:ps/devops"
+    assert winner.overrides == "group:acme/platform"
 
 
 def test_show_shadowed_emits_masked_entries(monkeypatch):
     _patch_variables(
         monkeypatch,
         {
-            "project:ps/devops/app": [_raw("TOKEN", "project-value")],
-            "group:ps/devops": [_raw("TOKEN", "group-value")],
-            "group:ps": [],
+            "project:acme/platform/app": [_raw("TOKEN", "project-value")],
+            "group:acme/platform": [_raw("TOKEN", "group-value")],
+            "group:acme": [],
         },
     )
 
@@ -109,17 +109,17 @@ def test_show_shadowed_emits_masked_entries(monkeypatch):
 
     origins = {v.origin: v for v in variables}
     assert set(origins) == {ORIGIN_OVERRIDE, ORIGIN_SHADOWED}
-    assert origins[ORIGIN_SHADOWED].defined_in == "group:ps/devops"
-    assert origins[ORIGIN_SHADOWED].overridden_by == "project:ps/devops/app"
+    assert origins[ORIGIN_SHADOWED].defined_in == "group:acme/platform"
+    assert origins[ORIGIN_SHADOWED].overridden_by == "project:acme/platform/app"
 
 
 def test_same_key_different_environment_scopes_do_not_merge(monkeypatch):
     _patch_variables(
         monkeypatch,
         {
-            "project:ps/devops/app": [_raw("TOKEN", "prod", environment_scope="production")],
-            "group:ps/devops": [],
-            "group:ps": [_raw("TOKEN", "any")],
+            "project:acme/platform/app": [_raw("TOKEN", "prod", environment_scope="production")],
+            "group:acme/platform": [],
+            "group:acme": [_raw("TOKEN", "any")],
         },
     )
 
@@ -131,7 +131,7 @@ def test_same_key_different_environment_scopes_do_not_merge(monkeypatch):
 
 
 def test_values_are_redacted_by_default(monkeypatch):
-    _patch_variables(monkeypatch, {"project:ps/devops/app": [_raw("TOKEN", "s3cret")]})
+    _patch_variables(monkeypatch, {"project:acme/platform/app": [_raw("TOKEN", "s3cret")]})
 
     variables, _ = CIVariablesAPI.resolve([PROJECT], direct_only=True)
     variable = variables[0]
@@ -144,7 +144,7 @@ def test_values_are_redacted_by_default(monkeypatch):
 
 
 def test_reveal_includes_raw_value(monkeypatch):
-    _patch_variables(monkeypatch, {"project:ps/devops/app": [_raw("TOKEN", "s3cret")]})
+    _patch_variables(monkeypatch, {"project:acme/platform/app": [_raw("TOKEN", "s3cret")]})
 
     variables, _ = CIVariablesAPI.resolve([PROJECT], direct_only=True, reveal=True)
     payload = variables[0].to_dict()
@@ -158,9 +158,9 @@ def test_identical_override_is_detectable_via_fingerprint(monkeypatch):
     _patch_variables(
         monkeypatch,
         {
-            "project:ps/devops/app": [_raw("TOKEN", "same")],
-            "group:ps/devops": [_raw("TOKEN", "same")],
-            "group:ps": [],
+            "project:acme/platform/app": [_raw("TOKEN", "same")],
+            "group:acme/platform": [_raw("TOKEN", "same")],
+            "group:acme": [],
         },
     )
 
@@ -174,7 +174,7 @@ def test_environment_filter_matches_wildcards(monkeypatch):
     _patch_variables(
         monkeypatch,
         {
-            "project:ps/devops/app": [
+            "project:acme/platform/app": [
                 _raw("ANY"),
                 _raw("PROD", environment_scope="production"),
                 _raw("REVIEW", environment_scope="review/*"),
@@ -191,7 +191,7 @@ def test_type_filter(monkeypatch):
     _patch_variables(
         monkeypatch,
         {
-            "project:ps/devops/app": [
+            "project:acme/platform/app": [
                 _raw("ENV"),
                 _raw("FILE", variable_type="file"),
             ]
@@ -215,7 +215,7 @@ def test_forbidden_scope_is_reported_not_raised(monkeypatch):
 
     assert [v.key for v in variables] == ["LOCAL"]
     refs = {s.ref for s in skipped}
-    assert refs == {"group:ps", "group:ps/devops"}
+    assert refs == {"group:acme", "group:acme/platform"}
     assert all(s.resource == "variables" for s in skipped)
 
 
@@ -228,6 +228,6 @@ def test_group_scope_uses_group_endpoint(monkeypatch):
 
     monkeypatch.setattr(GitLabClient, "paginate_safe", fake_paginate_safe)
 
-    CIVariablesAPI.resolve([Scope(kind=SCOPE_GROUP, path="ps/devops", id=62)], direct_only=True)
+    CIVariablesAPI.resolve([Scope(kind=SCOPE_GROUP, path="acme/platform", id=62)], direct_only=True)
 
     assert seen == ["groups/62/variables"]

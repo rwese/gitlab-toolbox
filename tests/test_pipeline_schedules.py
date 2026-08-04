@@ -67,8 +67,8 @@ def test_export_to_stdout_does_not_crash(monkeypatch):
             description="UIUX",
             variables=[
                 PipelineScheduleVariable(
-                    key="MOCKOON_IMAGE_URL",
-                    value="code.anexia.com:4567/ps/projects/automated-testing/mockoon:latest",
+                    key="MOCK_SERVER_IMAGE_URL",
+                    value="registry.example.com:4567/acme/platform/mock-server:latest",
                     variable_type="env_var",
                     raw=False,
                 )

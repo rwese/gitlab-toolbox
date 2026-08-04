@@ -54,7 +54,7 @@ class CIVariable:
     # Provenance
     scope_kind: str = ""  # queried scope kind ('project' / 'group')
     scope_path: str = ""  # queried scope path
-    defined_in: str = ""  # 'group:ps/devops' / 'project:ps/devops/app'
+    defined_in: str = ""  # 'group:acme/platform' / 'project:acme/platform/app'
     origin: str = ORIGIN_DIRECT
     overrides: Optional[str] = None  # scope ref masked by this entry
     overridden_by: Optional[str] = None  # scope ref masking this entry

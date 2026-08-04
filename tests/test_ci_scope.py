@@ -6,15 +6,15 @@ from gitlab_toolbox.models.ci_scope import SCOPE_GROUP, SCOPE_PROJECT
 
 
 def test_ancestor_group_paths_for_project():
-    assert ancestor_group_paths("ps/devops/app", SCOPE_PROJECT) == ["ps", "ps/devops"]
+    assert ancestor_group_paths("acme/platform/app", SCOPE_PROJECT) == ["acme", "acme/platform"]
 
 
 def test_ancestor_group_paths_for_group():
-    assert ancestor_group_paths("ps/devops", SCOPE_GROUP) == ["ps"]
+    assert ancestor_group_paths("acme/platform", SCOPE_GROUP) == ["acme"]
 
 
 def test_ancestor_group_paths_for_top_level_group():
-    assert ancestor_group_paths("ps", SCOPE_GROUP) == []
+    assert ancestor_group_paths("acme", SCOPE_GROUP) == []
 
 
 def test_map_concurrent_preserves_order():
@@ -23,31 +23,31 @@ def test_map_concurrent_preserves_order():
 
 def test_resolve_group_with_subgroups_and_projects(monkeypatch):
     def fake_request_safe(endpoint, params=None, method="GET"):
-        if endpoint == "groups/ps%2Fdevops":
-            return {"id": 62, "full_path": "ps/devops", "web_url": "u"}, None
+        if endpoint == "groups/acme%2Fplatform":
+            return {"id": 62, "full_path": "acme/platform", "web_url": "u"}, None
         raise AssertionError(f"unexpected endpoint {endpoint}")
 
     def fake_paginate_safe(endpoint, params=None, per_page=100, limit=None):
         if endpoint == "groups/62/descendant_groups":
-            return [{"id": 63, "full_path": "ps/devops/sub"}], None
+            return [{"id": 63, "full_path": "acme/platform/sub"}], None
         if endpoint == "groups/62/projects":
-            return [{"id": 100, "path_with_namespace": "ps/devops/app"}], None
+            return [{"id": 100, "path_with_namespace": "acme/platform/app"}], None
         if endpoint == "groups/63/projects":
-            return [{"id": 101, "path_with_namespace": "ps/devops/sub/lib"}], None
+            return [{"id": 101, "path_with_namespace": "acme/platform/sub/lib"}], None
         raise AssertionError(f"unexpected endpoint {endpoint}")
 
     monkeypatch.setattr(GitLabClient, "_run_api_request_safe", fake_request_safe)
     monkeypatch.setattr(GitLabClient, "paginate_safe", fake_paginate_safe)
 
     scopes, skipped = ScopeResolver.resolve(
-        groups=["ps/devops"], include_subgroups=True, include_projects=True
+        groups=["acme/platform"], include_subgroups=True, include_projects=True
     )
 
     assert [s.ref for s in scopes] == [
-        "group:ps/devops",
-        "group:ps/devops/sub",
-        "project:ps/devops/app",
-        "project:ps/devops/sub/lib",
+        "group:acme/platform",
+        "group:acme/platform/sub",
+        "project:acme/platform/app",
+        "project:acme/platform/sub/lib",
     ]
     assert skipped == []
 
@@ -56,7 +56,7 @@ def test_resolve_excludes_shared_projects(monkeypatch):
     seen_params = {}
 
     def fake_request_safe(endpoint, params=None, method="GET"):
-        return {"id": 62, "full_path": "ps/devops"}, None
+        return {"id": 62, "full_path": "acme/platform"}, None
 
     def fake_paginate_safe(endpoint, params=None, per_page=100, limit=None):
         seen_params.update(params or {})
@@ -65,7 +65,7 @@ def test_resolve_excludes_shared_projects(monkeypatch):
     monkeypatch.setattr(GitLabClient, "_run_api_request_safe", fake_request_safe)
     monkeypatch.setattr(GitLabClient, "paginate_safe", fake_paginate_safe)
 
-    ScopeResolver.resolve(groups=["ps/devops"], include_projects=True)
+    ScopeResolver.resolve(groups=["acme/platform"], include_projects=True)
 
     assert seen_params["with_shared"] == "false"
     assert seen_params["archived"] == "false"
@@ -77,8 +77,8 @@ def test_resolve_records_forbidden_scope(monkeypatch):
 
     monkeypatch.setattr(GitLabClient, "_run_api_request_safe", fake_request_safe)
 
-    scopes, skipped = ScopeResolver.resolve(projects=["ps/private"])
+    scopes, skipped = ScopeResolver.resolve(projects=["acme/private"])
 
     assert scopes == []
-    assert skipped[0].ref == "project:ps/private"
+    assert skipped[0].ref == "project:acme/private"
     assert "403" in skipped[0].reason

@@ -25,7 +25,7 @@ Maintainer/Owner on the queried projects and groups. No admin-only endpoint is c
 so instance-level variables (`admin/ci/variables`) and cross-user PAT lookups are out
 of scope; features that would need them are dropped rather than conditionally enabled.
 
-## 2. Verified API surface (GitLab 19.0-ee, checked against code.anexia.com)
+## 2. Verified API surface (checked against a GitLab 19.0-ee instance)
 
 | Data | Endpoint | Useful fields |
 |---|---|---|
@@ -100,7 +100,7 @@ carries an explicit origin:
 | | `inherited` | comes from a parent group, not redefined locally |
 | | `override` | defined locally **and** also present in a parent group |
 | | `shadowed` | the parent-group entry that a local `override` masks (only with `--show-shadowed`) |
-| `defined_in` | `group:ps/devops` / `project:ps/devops/x` | scope that actually holds the value |
+| `defined_in` | `group:acme/platform` / `project:acme/platform/app` | scope that actually holds the value |
 | `overrides` | scope path or `null` | for `origin=override`: the scope being masked |
 | `inheritance_depth` | int | 0 = direct, 1 = parent group, 2 = grandparent … |
 
