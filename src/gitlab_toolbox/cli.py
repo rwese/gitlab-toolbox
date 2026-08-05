@@ -2,6 +2,7 @@
 
 import click
 
+from . import __version__
 from .api.client import GitLabClient
 from .commands import (
     auth_cli,
@@ -16,7 +17,7 @@ from .commands import (
 
 
 @click.group(context_settings={"ignore_unknown_options": True}, invoke_without_command=True)
-@click.version_option(version="1.0.0")
+@click.version_option(version=__version__)
 @click.option(
     "--gitlab-url",
     envvar="GITLAB_URL",
