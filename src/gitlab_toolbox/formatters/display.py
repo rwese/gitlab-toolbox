@@ -670,10 +670,10 @@ class DisplayFormatter:
             header_style="bold magenta",
         )
 
-        table.add_column("Scope", style="cyan", no_wrap=False)
-        table.add_column("Key", style="yellow", no_wrap=False)
-        table.add_column("Origin", style="white")
-        table.add_column("Defined in", style="blue", no_wrap=False)
+        table.add_column("Scope", style="cyan", no_wrap=True, overflow="ellipsis")
+        table.add_column("Key", style="yellow", no_wrap=True, overflow="ellipsis", min_width=16)
+        table.add_column("Origin", style="white", no_wrap=True)
+        table.add_column("Defined in", style="blue", no_wrap=True, overflow="ellipsis")
         table.add_column("Env", style="green")
         table.add_column("Type", style="white")
         table.add_column("Flags", style="magenta")
