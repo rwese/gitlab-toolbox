@@ -1,6 +1,5 @@
 """Pipeline schedules command implementation."""
 
-import json
 import sys
 from pathlib import Path
 
@@ -10,6 +9,7 @@ from rich.console import Console
 from ..api.client import GitLabClient
 from ..api.pipeline_schedules import PipelineSchedulesAPI
 from ..formatters import DisplayFormatter
+from ..formatters import json_output as json
 from ..formatters.format_decorator import format_decorator
 
 console = Console(file=sys.stderr)

@@ -11,7 +11,6 @@ variables are never requested, so a variable's ``origin`` is relative to the
 readable group chain.
 """
 
-import json
 import sys
 from dataclasses import asdict
 from typing import List, Optional
@@ -22,6 +21,7 @@ from rich.console import Console
 from ..api.ci_tokens import CITokensAPI
 from ..api.ci_variables import CIVariablesAPI
 from ..models.ci_token import ALL_KINDS, KIND_ALIASES
+from ..formatters import json_output as json
 from ..formatters.format_decorator import format_decorator
 from ._scope import resolve_scopes, scope_options
 

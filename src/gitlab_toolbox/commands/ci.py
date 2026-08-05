@@ -17,7 +17,6 @@ parameter, the supplied variables are injected into the YAML's
 top-level ``variables:`` block before POSTing.
 """
 
-import json
 import sys
 from pathlib import Path
 from typing import Dict, Optional, Tuple
@@ -28,6 +27,7 @@ from rich.console import Console
 from ..api.ci_lint import CILintAPI
 from ..api.client import GitLabClient
 from ..formatters import DisplayFormatter
+from ..formatters import json_output as json
 
 # Console for status/info messages (goes to stderr)
 console = Console(file=sys.stderr)

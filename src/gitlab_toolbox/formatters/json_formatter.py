@@ -1,9 +1,9 @@
 """JSON output formatter."""
 
-import json
 from dataclasses import asdict
 from typing import List, Optional
 
+from . import json_output as json
 from ..models import (
     CIToken,
     CIVariable,
