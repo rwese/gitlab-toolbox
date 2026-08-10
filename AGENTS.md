@@ -1,120 +1,95 @@
-# GitLab Toolbox - Agent Instructions
+# GitLab Toolbox — Agent Instructions
 
-**Repository**: [https://github.com/rwese/gitlab-toolbox](https://github.com/rwese/gitlab-toolbox)
+**Repository**: [github.com/rwese/gitlab-toolbox](https://github.com/rwese/gitlab-toolbox)
 
-A Python CLI tool for GitLab operations using direct HTTP API calls via `glab`.
+GitLab Toolbox is a Python CLI for GitLab operations. It uses direct HTTP REST and
+GraphQL requests; it does not use `glab api`. Existing host-matched `glab`
+credentials may be read as an authentication fallback, but this project must not
+create, modify, or remove them.
 
-## Design Philosophy
+## Required Documentation
 
-This tool is designed for **scripting and shell exploration**. All commands should:
+Read the relevant document before changing the corresponding area:
 
-- Work well when piped/scripted (output to stdout/stderr appropriately)
-- Support `--dry-run` for safe testing
-- Support `--output` for file-based workflows
-- Use JSON as the primary machine-readable format
-- Use Rich formatting for human-readable table output in interactive shells
-- Avoid interactive prompts (except optional `--yes` confirmations when necessary)
+- [Architecture](docs/architecture.md) — layers, API client, authentication,
+  pagination, scope resolution, and CI variable inheritance.
+- [Coding standards](docs/coding-standards.md) — formatting, typing, HTTP error
+  handling, Click commands, tests, and documentation.
+- [Git workflow](docs/git-workflow.md) — branches, Conventional Commits, validation,
+  and review.
 
-## Project Specifications
+Keep these documents and the README aligned with implementation changes.
 
-Reference these documents for detailed guidance:
+## Design Principles
 
-- [Architecture](specs/architecture.md) - Layer structure and design patterns
-- [Coding Standards](specs/coding-standards.md) - Formatting, linting, and patterns
-- [Git Workflow](specs/git-workflow.md) - Branch naming and commit conventions
+Commands should:
 
-## Quick Start
+- Work well in scripts and pipelines.
+- Send result data to stdout and status/progress messages to stderr.
+- Provide machine-readable output where supported, with JSON as the primary format.
+- Use Rich tables for interactive output.
+- Avoid interactive prompts unless a command explicitly requires confirmation.
+- Redact secret values by default.
 
-```bash
-# Development commands
-uv run pytest          # Run tests
-uv run black src/      # Format code
-uv run ruff check src/ # Lint code
-
-# Run the tool
-uv run gitlab-toolbox --help
-```
+Do not assume every command supports `--dry-run` or file output; preserve and test the
+actual interface of the command being changed.
 
 ## Project Structure
 
 ```
 src/gitlab_toolbox/
-├── cli.py              # Main entry point
-├── api/               # API wrappers (glab)
-├── models/            # Data models (dataclasses)
-├── commands/          # Click command implementations
-└── formatters/        # Output formatters (Rich, CSV, JSON, Markdown)
+├── cli.py              # Main entry point and command registration
+├── api/                # HTTP API clients and scope resolution
+├── models/             # Domain dataclasses
+├── commands/           # Click command implementations
+└── formatters/         # Rich, JSON, CSV, and Markdown output
+tests/                  # pytest suite
+docs/                   # Architecture and contributor documentation
 ```
 
-## Key Guidelines
+## Implementation Guidelines
 
-### 1. GitLab API Patterns
+### GitLab API
 
-- Use `glab api` commands (not direct HTTP)
-- URL-encode project paths: `group/project` → `group%2Fproject`
-- Groups use `parent_id` for hierarchy (two-pass algorithm)
+- Use `GitLabClient` and `requests`; never shell out to `glab api`.
+- URL-encode project and group identifiers used in REST endpoint paths.
+- Use pagination helpers rather than duplicating pagination loops.
+- Use optional/safe request helpers for expected missing or inaccessible resources.
+- Keep `glab` integration read-only, host-specific, and limited to authentication
+  fallback after configured authentication is absent or receives a 401.
 
-### 2. Output Design
+### Adding Commands
 
-- **stdout**: Machine-readable output (JSON, CSV, raw data)
-- **stderr**: Status messages, progress, user feedback
-- Rich tables for interactive shell display (auto-detected via TTY)
-- JSON output when piped/scripted
+As applicable:
 
-```python
-link = f"[link={entity.web_url}]🔗[/link]" if entity.web_url else ""
-```
+1. Add or update a model in `models/`.
+2. Add API behavior in `api/`.
+3. Add formatters in `formatters/`.
+4. Implement the Click command in `commands/`.
+5. Register it in `cli.py` or its parent command group.
+6. Add tests and update user-facing documentation.
 
-### 3. Command Design
+### Commits
 
-All commands should support:
+Use `<type>(<scope>): <description>` with accepted types `feat`, `fix`, `docs`,
+`style`, `refactor`, `test`, and `chore`. Keep changes focused and do not push without
+explicit user instruction.
+
+## Validation
+
+Before completing work, run:
 
 ```bash
-# Script-friendly: output to file
-gitlab-toolbox pipeline-schedules export -o schedules.json
-
-# Dry-run for safe testing
-gitlab-toolbox pipeline-schedules import -i schedules.json --dry-run
-
-# JSON output for piping
-gitlab-toolbox pipeline-schedules list --output json | jq '.[] | .id'
+uv run ruff check src/ tests/
+uv run black --check src/ tests/
+uv run pytest
 ```
 
-### 4. Adding New Commands
-
-1. Create model in `models/`
-2. Create API wrapper in `api/`
-3. Add formatters in `formatters/`
-4. Create command in `commands/`
-5. Register in `cli.py`
-
-### 5. Conventional Commits
-
-- Follow the repository-local commit format from `specs/git-workflow.md`: `<type>(<scope>): <description>`
-- Use Conventional Commits types that are already accepted by the repo: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`
-- Keep scope short and specific to the affected area, such as `api`, `cli`, `projects`, or `readme`
-- Write the description as a concise imperative summary
-- Split unrelated changes into separate commits instead of combining multiple concerns into one message
-- When a change is breaking, use Conventional Commits breaking-change syntax and include context in the commit body or footer
-
-Examples:
-
-```text
-feat(projects): add search functionality
-fix(api): handle timeout on slow connections
-docs(readme): update installation instructions
-```
-
-## Task Validation
-
-Before completing any task:
-
-1. Run: `uv run ruff check src/`
-2. Run: `uv run black --check src/`
-3. Run: `uv run pytest`
-4. Update relevant documentation
+Update relevant files under `docs/`, plus README.md or AGENTS.md when behavior or
+contributor guidance changes.
 
 ## Environment Variables
 
-- `GITLAB_TOKEN`: Personal access token (optional)
-- `GITLAB_URL`: GitLab instance URL (default: https://gitlab.com)
+- `GITLAB_URL`: GitLab instance URL (default: `https://gitlab.com`)
+- `GITLAB_TOKEN`, `GL_TOKEN`, `CI_JOB_TOKEN`, `CI_API_TOKEN`,
+  `GITLAB_ACCESS_TOKEN`: supported token sources in precedence order

@@ -45,13 +45,16 @@ class GitLabClient:
         cls._token = token
 
     @classmethod
-    def _read_glab_config(cls) -> tuple[Optional[str], Optional[str]]:
-        """Read configuration from glab config files.
+    def _read_glab_config(
+        cls, base_url: Optional[str] = None
+    ) -> tuple[Optional[str], Optional[str]]:
+        """Read an existing glab credential without modifying its configuration.
 
-        Prefers hosts that have tokens configured over the default host.
+        When ``base_url`` is supplied, only a credential for that host is
+        considered. Otherwise, prefer a configured host with a token.
 
         Returns:
-            Tuple of (base_url, token) or (None, None) if not found
+            Tuple of (base_url, token) or (None, None) if not found.
         """
         import yaml
 
@@ -70,23 +73,33 @@ class GitLabClient:
                     hosts = config.get("hosts", {})
                     default_host = config.get("host", "gitlab.com")
 
-                    # First, try to find any host that has a token
-                    for host_name, host_config in hosts.items():
+                    requested_host = None
+                    if base_url:
+                        requested_host = (
+                            base_url.replace("https://", "").replace("http://", "").rstrip("/")
+                        )
+
+                    if requested_host and requested_host not in hosts:
+                        continue
+                    candidates = (
+                        [(requested_host, hosts[requested_host])]
+                        if requested_host
+                        else hosts.items()
+                    )
+                    for host_name, host_config in candidates:
                         token = host_config.get("token")
                         if token and token.strip():
-                            # Construct base URL
                             api_protocol = host_config.get("api_protocol", "https")
                             api_host = host_config.get("api_host", host_name)
-                            base_url = f"{api_protocol}://{api_host}"
-                            return base_url, token
+                            return f"{api_protocol}://{api_host}", token
 
-                    # If no host has a token, fall back to the default host (even without token)
-                    if default_host in hosts:
+                    # Without a requested host, retain the default instance URL
+                    # even when it has no configured token.
+                    if not requested_host and default_host in hosts:
                         host_config = hosts[default_host]
                         api_protocol = host_config.get("api_protocol", "https")
                         api_host = host_config.get("api_host", default_host)
-                        base_url = f"{api_protocol}://{api_host}"
-                        return base_url, None
+                        return f"{api_protocol}://{api_host}", None
 
                 except Exception as e:
                     if cls._debug:
@@ -97,11 +110,11 @@ class GitLabClient:
 
     @classmethod
     def configure_from_env(cls) -> None:
-        """Configure client from environment variables and glab config.
+        """Configure the client from environment variables and existing glab auth.
 
-        Priority order (same as glab):
+        Priority order:
         1. Environment variables
-        2. glab config files
+        2. Existing glab configuration, only when a token is not configured
         3. Defaults
         """
         # First try environment variables
@@ -115,12 +128,13 @@ class GitLabClient:
             or os.getenv("GITLAB_ACCESS_TOKEN")
         )
 
-        # If we don't have both URL and token from env, try glab config
-        if not (base_url and token):
-            config_url, config_token = cls._read_glab_config()
+        # Consult glab only when no authentication token is configured. A token
+        # without an explicit URL uses the default GitLab URL below.
+        if not token:
+            config_url, config_token = cls._read_glab_config(base_url)
             if config_url and not base_url:
                 base_url = config_url
-            if config_token and not token:
+            if config_token:
                 token = config_token
 
         # Set defaults if still not configured
@@ -282,6 +296,7 @@ class GitLabClient:
         params: Optional[Dict] = None,
         method: str = "GET",
         suppress_errors: bool = False,
+        allow_glab_fallback: bool = True,
     ) -> Any:
         """Run a GitLab API request and return JSON result.
 
@@ -290,6 +305,8 @@ class GitLabClient:
             params: Optional query parameters (for GET) or body data (for POST/PUT/PATCH)
             method: HTTP method (GET, POST, PUT, DELETE, etc.)
             suppress_errors: Do not print API errors; the caller reports them
+            allow_glab_fallback: Retry one unauthorized request with an existing
+                glab credential for the same host.
 
         Returns:
             Parsed JSON response (dict or list)
@@ -339,6 +356,22 @@ class GitLabClient:
             return result
 
         except requests.HTTPError as e:
+            status = e.response.status_code if e.response is not None else None
+            if status == 401 and allow_glab_fallback:
+                _, glab_token = cls._read_glab_config(cls._base_url)
+                if glab_token and glab_token != cls._token:
+                    configured_token = cls._token
+                    cls.set_token(glab_token)
+                    try:
+                        return cls._run_api_request(
+                            endpoint,
+                            params,
+                            method,
+                            suppress_errors=suppress_errors,
+                            allow_glab_fallback=False,
+                        )
+                    finally:
+                        cls.set_token(configured_token)
             if suppress_errors:
                 raise
             # Try to parse GitLab API error response

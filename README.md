@@ -67,31 +67,22 @@ gitlab-toolbox --token YOUR_TOKEN groups list
 **Supported token environment variables** (in order of precedence):
 
 - `GITLAB_TOKEN`
-- `CI_JOB_TOKEN` (for GitLab CI/CD)
 - `GL_TOKEN`
+- `CI_JOB_TOKEN` (for GitLab CI/CD)
+- `CI_API_TOKEN`
+- `GITLAB_ACCESS_TOKEN`
 
-### Authentication Commands
+### Authentication Status
 
-GitLab Toolbox provides dedicated commands for managing authentication:
+GitLab Toolbox does not create, modify, or remove credentials. Configure a token
+through your environment or authenticate separately with `glab`. When no token is
+configured, the client reads an existing `glab` credential for the requested host.
+If a configured token receives a 401 response, the request is retried once with that
+host's `glab` credential. Credentials are only read, never changed.
 
 ```bash
 # Check authentication status
 gitlab-toolbox auth status [--url URL]
-
-# Interactive setup wizard
-gitlab-toolbox auth setup [--url URL] [--token TOKEN]
-
-# Login with a token
-gitlab-toolbox auth login --url https://gitlab.example.com --token YOUR_TOKEN
-
-# Interactive login using glab CLI
-gitlab-toolbox auth login --interactive
-
-# Logout from an instance
-gitlab-toolbox auth logout [--url URL] [--all]
-
-# Manage token environment variables
-gitlab-toolbox auth token [--set TOKEN] [--clear]
 ```
 
 ### GitLab Instance
@@ -437,17 +428,26 @@ gitlab-toolbox mergerequests list | grep "failed"
 uv pip install -e ".[dev]"
 
 # Format code
-black src/
+uv run black src/ tests/
 
 # Lint code
-ruff check src/
+uv run ruff check src/ tests/
 
 # Run tests
-pytest
+uv run pytest
 
 # Run CLI
 uv run gitlab-toolbox --help
 ```
+
+### Developer Documentation
+
+- [Architecture](docs/architecture.md) — API transport, authentication fallback,
+  layers, pagination, scope resolution, and CI variable inheritance.
+- [Coding standards](docs/coding-standards.md) — formatting, typing, command design,
+  error handling, and testing.
+- [Git workflow](docs/git-workflow.md) — branches, commits, validation, and review.
+- [Agent instructions](AGENTS.md) — concise repository guidance for AI coding agents.
 
 ## Prerequisites
 

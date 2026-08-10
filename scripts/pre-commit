@@ -71,20 +71,12 @@ fi
 
 # 5. Check AGENTS.md exists
 echo ""
-echo "5. Agentic Configuration"
+echo "5. Agent Instructions"
 echo -n "  AGENTS.md exists... "
 if [ -f "AGENTS.md" ]; then
-    echo -e "${GREEN}✓${NC} OpenCode instructions file present"
+    echo -e "${GREEN}✓${NC} Agent instructions file present"
 else
     echo -e "${RED}✗${NC} AGENTS.md missing"
-    ALL_PASSED=false
-fi
-
-echo -n "  opencode.json exists... "
-if [ -f "opencode.json" ]; then
-    echo -e "${GREEN}✓${NC} OpenCode configuration present"
-else
-    echo -e "${RED}✗${NC} opencode.json missing"
     ALL_PASSED=false
 fi
 

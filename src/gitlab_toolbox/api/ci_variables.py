@@ -5,7 +5,7 @@ GitLab does not expose where an effective variable comes from, so the chain
 ``(key, environment_scope)``, nearest scope wins. Instance-level variables are
 deliberately not read: ``admin/ci/variables`` is admin-only and this tool
 assumes a non-admin token, so ``origin`` is relative to the readable group
-chain (see specs/plans/ci-config-audit.md).
+chain. See ``docs/architecture.md`` for the architecture overview.
 """
 
 import sys

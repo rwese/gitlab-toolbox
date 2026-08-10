@@ -2,7 +2,7 @@
 
 ## Branch Naming
 
-- `feature/*` - New features
+- `feat/*` - New features
 - `fix/*` - Bug fixes
 - `docs/*` - Documentation updates
 - `refactor/*` - Code refactoring
@@ -10,7 +10,7 @@
 Example:
 
 ```
-feature/add-pipeline-schedules
+feat/add-pipeline-schedules
 fix/project-search-timeout
 docs/update-api-examples
 ```
@@ -39,12 +39,15 @@ docs(readme): update installation instructions
 
 ## Pre-commit Hooks
 
-The project includes a pre-commit hook that validates:
+The repository provides `scripts/pre-commit`, which can be run manually. It
+validates:
 
 1. **Code formatting** with Black
 2. **Linting** with Ruff
 3. **Test collection** with pytest
-4. **Agentic configuration** (AGENTS.md, opencode.json)
+4. **Agent instructions** (`AGENTS.md` exists)
+
+It is not automatically installed as a Git hook.
 
 Run manually:
 
